@@ -6,6 +6,7 @@ local loadStateMod = require('modules.loadState')
 --libraries
 local timerModule = require('libraries.time')
 local bitser = require('libraries.bitser')
+local template_handler = require('modules.template_handler')
 -----------
 
 --submenus
@@ -41,14 +42,7 @@ local input = {
 
     }
 }
-local level = {
-    bpm = 180,
-    time_sign = {4,4},
-    beat = 0,
-    arrows = { --0 = no arrow, 1 arrow, 2 long note start, 3 long  note end
-
-    }
-}
+local level = {}
 
 local activeArrows = {
     trails = {
@@ -120,6 +114,8 @@ function clear_arrows()
     end
 end
 function loadLevel(name)
+    level = template_handler:get('level')
+
     songName = name
     fixed_time = 0
     reset_stats()

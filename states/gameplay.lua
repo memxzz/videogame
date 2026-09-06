@@ -90,6 +90,7 @@ function addPoints(value)
 end
 local timed = 0
 function beat_udpate(dt)
+    if paused then return end
     local value = (60/level.bpm)
     if not started then timed = value level.beat = 0 return end
     
@@ -114,7 +115,10 @@ function clear_arrows()
     end
 end
 function loadLevel(name)
+
+    
     level = template_handler:get('level')
+    
 
     songName = name
     fixed_time = 0
@@ -126,6 +130,8 @@ function loadLevel(name)
     local levelDataEnc = love.filesystem.read('data/levels/'..name..'.rvc')
     local unencrypthLevel = bitser.loads(levelDataEnc)
     level = unencrypthLevel
+
+    level.bpm = 180 --this is temporal
 end
 function endChart()
     local newlevel = bitser.dumps(level)

@@ -62,7 +62,8 @@ function arrow_manage_asset(v,x,y)
 end
 local accumu = 0
 local tails = {0,0,0,0}
-function draw_tail(v,i,x,y,index)
+local lastPrinted = 999999
+function draw_tail_old(v,i,x,y,index)
     if v == 1 then return end
     --if v == 2 then tails[i] = tails[i] + 1 end
     if v == 3 then tails[i] = index return end
@@ -75,10 +76,13 @@ function draw_tail(v,i,x,y,index)
         ---local f = y-r*80 -60
         local top = bottom - tails[i]*height*size_factor + chart_sets.offset
         local d = y - r*70*size_factor
+        --print(d,top)
         --if d > top then return end
+        --if d > top then print('over') end
         if d > top then
             love.graphics.draw(assets['longnote_start'],x-35,top+30,nil,0.1,0.1*size_factor)
             love.graphics.draw(assets['longnote_start'],x-35,d,nil,0.1,0.1*size_factor)
+            --return
         end
         
         if r > max  then return end
@@ -86,6 +90,30 @@ function draw_tail(v,i,x,y,index)
 
     --
     
+end
+function draw_tail(v,x,i,arrow,index)
+    if v ~= 2 then return end
+    if not arrow.tails then return end
+    local bottom = 420
+    local size_factor = chart_sets.size / 300
+    --local y = arrow.tails[i]+chart_sets.offset
+    
+    for r = 0,(arrow.tails[i]*10)-1 do
+        local sprite = 'longnote_start'
+        local End = false
+        
+    
+        --print(index)
+        local  y = bottom-index*height*size_factor+chart_sets.offset
+        local d = y - size_factor - 70 - r*70 --y its the friends we made along the way
+        print(index,y,r)
+        if r >= (arrow.tails[i]*10)-2 then 
+            sprite = 'longnote_end' 
+            --End = true
+        end
+        love.graphics.draw(assets[sprite],x-35,d,nil,0.1,0.1*size_factor)
+        if End then return end
+    end
 end
 function draw_arrow(arrow,index)
     local bottom = 420
@@ -100,7 +128,7 @@ function draw_arrow(arrow,index)
             y = bottom-index*height*size_factor+chart_sets.offset
             
             --local amount = chart_sets.size/300
-            draw_tail(v,i,x,y,index)
+            draw_tail(v,x,i,arrow,index)
             arrow_manage_asset(v,x,y)
             
         end
@@ -161,9 +189,10 @@ function draw_level()
       
     end
 end
-function mod:load()
+function mod:load(params)
     print('[Chart_editor]: Loaded.')
-    load_level('lasuperatto')
+    --load_level('lasuperatto')
+    load_level(params.song)
     print('[Chart_editor]: Level: '..tostring(level))
 end
 
@@ -313,7 +342,7 @@ function addNote(time,typ)
     local d = {0,0,0,0,index = time}
     if level.arrows[time] then d = level.arrows[time] end
     d[trail] = typ
-    last_arrow = d
+    if typ ~= 3 then last_arrow = d end
     level.arrows[time] = d
 end
 
@@ -373,12 +402,17 @@ function love.wheelmoved( x, y )
 end
 
 function love.mousereleased( x, y, button, istouch, presses )
+    if not last_arrow then return end
+    if not last_arrow.index then return end
     local y = timetogrid()
     local distance = y-last_arrow.index
     if distance <= 0 then return end
     if not last_arrow[trail] then return end 
     if last_arrow[trail] == 0 then return end
+    local tails = level.arrows[last_arrow.index].tails
+    if not tails then tails = {0,0,0,0} end
     level.arrows[last_arrow.index][trail] = 2
-    addNote(y,3)
+    tails[trail] = y-last_arrow.index
+    level.arrows[last_arrow.index].tails = tails
 end
 return mod

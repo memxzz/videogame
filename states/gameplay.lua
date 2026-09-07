@@ -30,7 +30,8 @@ local elements = {
     arrow = {
         activeIndex,
         trailIndex,
-        position = {x=0,y=0}
+        position = {x=0,y=0},
+        time = 0,
     }
 }
 local debug = false
@@ -201,8 +202,9 @@ function mod:load(params)
     pause_menu:load()
     sprites["trail"] = love.graphics.newImage('assets/trail.png')
     sprites["arrow"] = love.graphics.newImage('assets/arrow.png')
-    loadLevel(params.song)
-    
+    sprites["arrowtail_end"] = love.graphics.newImage('assets/arrow_long_end.png')
+    sprites["arrowtail_start"] = love.graphics.newImage('assets/arrow_long_start.png')
+    loadLevel(params.song) 
     
 end
 function moveArrows(dt)
@@ -226,7 +228,7 @@ function spawnArrow()
     for _,arrow in pairs(level.arrows) do
         local val = (fixed_time-arrow.index)-1
         
-        if fixed_time >= arrow.index+1*velMulty then 
+        if fixed_time >= arrow.index+1*velMulty and not arrow.skip then 
            -- print('spawn',arrow.index)
             
             for i,v in pairs(arrow) do
@@ -235,12 +237,13 @@ function spawnArrow()
                 local tableD = shallow_copy(elements.arrow)
                 tableD.position.y = height*4 - scroll * 100
                 tableD.delay = val
+                tableD.time = arrow.index
                 if activeArrows.trails[i] and v ~= 0 then
                     table.insert(activeArrows.trails[i],tableD)
                 end
                 --
             end
-            level.arrows[_] = nil
+            level.arrows[_].skip = true
         end
     end
 end
@@ -290,6 +293,22 @@ function inputPress(key)
         if result == i then press(v) end
     end
 end
+function drawTail(arrow)
+    if true then return end --not finished, so we dont use this funcion yet.
+    --local arrow = level.arrows[index]
+    local lvlArrow = level.arrows[arrow.time]
+    if not lvlArrow then return end
+    local lvlArrowType = lvlArrow[arrow.trailIndex]
+    if lvlArrowType ~= 2 then return end
+    local tails = lvlArrow.tails[arrow.trailIndex]
+    for i = 0,(tails*10)-1 do
+        local offset = 300
+        local scale = 700
+        local y = arrow.position.y - offset - i*scale
+        love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,y)
+    end
+    --for i in 0,lvlArrow.tails
+end
 function drawArrows()
 ---if level.arrows[time] == nil then return end
    -- print((level.arrows[time]))
@@ -298,7 +317,7 @@ function drawArrows()
         for d,f in pairs(v) do
        
             f.position.x = (spriteW*2.1) - i *spriteW + width*3
-            
+            drawTail(f)
             love.graphics.setColor(1, 1, 1, 1)
             love.graphics.draw(sprites["arrow"],f.position.x,f.position.y)
             if f.delay and debug then

@@ -4,6 +4,7 @@ local sprites = {
     
 }
 local levels = {
+    'test',
     'lasuperatto',
     'cavort',
     'U53RDV [TFR],  — 22:10 pon dance or die we xdxdxd'
@@ -90,6 +91,12 @@ function mod:keypressed(key)
     if key == 'down' then indexselect = indexselect + 1 end
     if indexselect < 0 then indexselect = 0 end
     if indexselect >= #levels then indexselect = #levels -1 end
+
+    if key == '7' then
+        if love.filesystem.getInfo('data/levels/'..levels[indexselect+1]..'.rvc') then 
+            loadStateMod:loadState('chart_editor',{song = levels[indexselect+1]})
+        end
+    end
     if key == "return" then
         if love.filesystem.getInfo('data/levels/'..levels[indexselect+1]..'.rvc') then 
             loadStateMod:loadState('gameplay',{song = levels[indexselect+1]})

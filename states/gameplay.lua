@@ -33,7 +33,7 @@ local elements = {
         position = {x=0,y=0}
     }
 }
-local debug = true
+local debug = false
 local input = {
     pointingTo = { --to what arrow each Trail is pointing.
         [1] = nil,
@@ -461,7 +461,7 @@ end
 function mod:keypressed( key )
     if not paused then  inputPress(key) end
     pause_menu:key(key)
-    
+    if key == '-' then debug = not debug end
     if key ==  'escape' then 
         love.audio.pause(song)
         paused = true

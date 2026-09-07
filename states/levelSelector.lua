@@ -101,7 +101,7 @@ function mod:update(dt)
     button_update(dt)
     if love.keyboard.isDown('backspace') then
         time = time + dt
-        if time > 4 then
+        if time > 1 then
             time = 0
             loadStateMod:loadState('mainMenu')
         end

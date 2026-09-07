@@ -33,6 +33,7 @@ local elements = {
         position = {x=0,y=0}
     }
 }
+local debug = true
 local input = {
     pointingTo = { --to what arrow each Trail is pointing.
         [1] = nil,
@@ -102,6 +103,11 @@ function beat_udpate(dt)
         timed = 0
     end
 end
+function playsong()
+    started = false
+    ed = 0
+
+end
 function table_clear(table)
     for i,v in pairs(table) do table[i] = nil end
 end
@@ -130,12 +136,8 @@ function loadLevel(name)
     local levelDataEnc = love.filesystem.read('data/levels/'..name..'.rvc')
     local unencrypthLevel = bitser.loads(levelDataEnc)
     level = unencrypthLevel
-
+    
     level.bpm = 180 --this is temporal
-end
-function endChart()
-    local newlevel = bitser.dumps(level)
-    love.filesystem.write('data/levels/newlevel.rvc',newlevel)
 end
 function playsong()
     started = false
@@ -144,7 +146,7 @@ function playsong()
         song:setPitch(velMulty)
         love.audio.play(song)
         started = true
-    end,{timeDue = 5})
+    end,{timeDue = 2})
 end
 
 function shallow_copy(t)
@@ -219,10 +221,10 @@ function moveArrows(dt)
     end
 end
 
-function spawnArrow(arrow)
+function spawnArrow_old(arrow)
  
-    
     if level.arrows[fixed_time] == nil then return end
+    
     --print(level.arrows[time])
 
     for i,v in pairs(level.arrows[fixed_time]) do
@@ -230,10 +232,33 @@ function spawnArrow(arrow)
         local scroll = confs.scrollSpeed*velMulty
         local tableD = shallow_copy(elements.arrow)
         tableD.position.y = height*4 - scroll * 100
-        
+        if not activeArrows.trails[i] then print('is nil?') end
         if v ~= 0 then table.insert(activeArrows.trails[i],tableD) end
     end
 
+end
+function spawnArrow()
+    if paused then return end
+    for _,arrow in pairs(level.arrows) do
+        local val = fixed_time-arrow.index
+        
+        if fixed_time >= arrow.index+1 then 
+            print('spawn',arrow.index)
+            
+            for i,v in pairs(arrow) do
+                --print('new')
+                local scroll = confs.scrollSpeed*velMulty
+                local tableD = shallow_copy(elements.arrow)
+                tableD.position.y = height*4 - scroll * 100
+                tableD.delay = val
+                if activeArrows.trails[i] and v ~= 0 then
+                    table.insert(activeArrows.trails[i],tableD)
+                end
+                --
+            end
+            level.arrows[_] = nil
+        end
+    end
 end
 function rankings(magnitud)
     local scroll = confs.scrollSpeed*velMulty
@@ -254,7 +279,7 @@ function press(v)
     local magnitud = distance(pos1,pos2)
     if magnitud < 1400 then 
         v.position.y = 9999 
-        activeArrows.trails[v.trailIndex][v.activeIndex] = nil -- here
+        activeArrows.trails[v.trailIndex][v.activeIndex] = nil
         rankings(magnitud) 
     end 
 end
@@ -288,7 +313,22 @@ function drawArrows()
         for d,f in pairs(v) do
        
             f.position.x = (spriteW*2.1) - i *spriteW + width*3
+            
+            love.graphics.setColor(1, 1, 1, 1)
             love.graphics.draw(sprites["arrow"],f.position.x,f.position.y)
+            if f.delay and debug then
+                --print('text')
+                local num = f.delay
+                local result = tostring(num):sub(1, 3)
+                love.graphics.push()
+                love.graphics.setColor(1, 0, 0, 1)
+              --  love.graphics.scale(10, 10)
+                love.graphics.print(result,f.position.x+250,f.position.y+250,0,10,10)
+                love.graphics.setLineWidth(20)
+                love.graphics.rectangle('line',f.position.x+100,f.position.y+100,500,500)
+                love.graphics.pop()
+                love.graphics.setColor(1, 1, 1, 1)
+            end
         end
         
         
@@ -312,7 +352,7 @@ function mod:draw()
 
     love.graphics.print(stringedPoints,pointsOffsetX,height/2-200,nil,1.5)
     love.graphics.print(stringedAccuracy,accuracyOffsetX,height/2-170,nil,1.5)
-    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2]))
+    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(fixed_time))
     
     love.graphics.push()
     love.graphics.setColor(1,1,1,1)
@@ -421,7 +461,7 @@ end
 function mod:keypressed( key )
     if not paused then  inputPress(key) end
     pause_menu:key(key)
-    if key == 'return' then endChart() end
+    
     if key ==  'escape' then 
         love.audio.pause(song)
         paused = true

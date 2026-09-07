@@ -221,29 +221,13 @@ function moveArrows(dt)
     end
 end
 
-function spawnArrow_old(arrow)
- 
-    if level.arrows[fixed_time] == nil then return end
-    
-    --print(level.arrows[time])
-
-    for i,v in pairs(level.arrows[fixed_time]) do
-        --print('new')
-        local scroll = confs.scrollSpeed*velMulty
-        local tableD = shallow_copy(elements.arrow)
-        tableD.position.y = height*4 - scroll * 100
-        if not activeArrows.trails[i] then print('is nil?') end
-        if v ~= 0 then table.insert(activeArrows.trails[i],tableD) end
-    end
-
-end
 function spawnArrow()
     if paused then return end
     for _,arrow in pairs(level.arrows) do
-        local val = fixed_time-arrow.index
+        local val = (fixed_time-arrow.index)-1
         
-        if fixed_time >= arrow.index+1 then 
-            print('spawn',arrow.index)
+        if fixed_time >= arrow.index+1*velMulty then 
+           -- print('spawn',arrow.index)
             
             for i,v in pairs(arrow) do
                 --print('new')
@@ -277,6 +261,7 @@ function press(v)
         y = v.position.y
     }
     local magnitud = distance(pos1,pos2)
+    v.delay = magnitud
     if magnitud < 1400 then 
         v.position.y = 9999 
         activeArrows.trails[v.trailIndex][v.activeIndex] = nil
@@ -343,6 +328,18 @@ function drawTrail()
         love.graphics.draw(sprites["trail"],x,height*4)
     end
 end
+function debug_draw()
+    if not debug then return end
+    local y = height*4
+    love.graphics.setColor(1,0,0,1)
+    love.graphics.line(800,y,4000,y)
+    for i,v in pairs(input.pointingTo) do
+        if v then
+            love.graphics.line(width*3,height*6,v.position.x+800,v.position.y+500)
+        end
+    end
+    love.graphics.setColor(1,1,1,1)
+end
 function mod:draw()
     love.graphics.print(ranking,width/2 - 50,height/2 -50,nil,2)
     local stringedPoints = 'points: '..tostring(stats.points)
@@ -359,6 +356,7 @@ function mod:draw()
     love.graphics.scale(0.15, 0.15)
     drawTrail()
     drawArrows()
+    debug_draw()
     
     love.graphics.pop()
     pause_menu:draw()

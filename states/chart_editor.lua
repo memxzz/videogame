@@ -8,22 +8,25 @@ local fixed_delta = 1/60
 local arrow = {}
 local trail = 0
 local debug_bpm = 180--to delete
-
+local assets = {}
 local playing = false
 local old_timestep = 0
 local accumulator = 0
 local song
+local last_arrow = {}
+
 local chart_sets = {
     offset = 0,
     size = 300,
-    multy = 1,
+    multy = 0.5,
     total_snap = false
    -- time_offset = 0,
 }
 local width, height, flags = love.window.getMode( )
---libraries-----------
+
 local bitser = require('libraries.bitser')
 local template_handler = require('modules.template_handler')
+
 function new_level()
     return template_handler:get('level')
 end
@@ -41,8 +44,48 @@ function load_level(name)
     else
         song = love.audio.newSource('assets/music/lasuperatto.mp3','static')
     end
-    
+    assets['longnote_start'] = love.graphics.newImage('assets/arrow_long_start.png')
+    assets['longnote_end'] = love.graphics.newImage('assets/arrow_long_end.png')
     level = loaded_level
+end
+
+function arrow_manage_asset(v,x,y)
+    if v <= 2 then
+        love.graphics.circle('fill',x,y,30)
+    end
+    --if v == 2 then
+    --    love.graphics.draw(assets['longnote_start'],x-35,y-35,nil,0.1,0.1)
+    --end
+    if v == 3 then
+        love.graphics.draw(assets['longnote_end'],x-35,y-35,nil,0.1,0.1)
+    end
+end
+local accumu = 0
+local tails = {0,0,0,0}
+function draw_tail(v,i,x,y,index)
+    if v == 1 then return end
+    --if v == 2 then tails[i] = tails[i] + 1 end
+    if v == 3 then tails[i] = index return end
+    local bottom = 420
+    local r = 0
+    local max = 20
+    local size_factor = chart_sets.size / 300
+    while true do
+        r = r + 1
+        ---local f = y-r*80 -60
+        local top = bottom - tails[i]*height*size_factor + chart_sets.offset
+        local d = y - r*70*size_factor
+        --if d > top then return end
+        if d > top then
+            love.graphics.draw(assets['longnote_start'],x-35,top+30,nil,0.1,0.1*size_factor)
+            love.graphics.draw(assets['longnote_start'],x-35,d,nil,0.1,0.1*size_factor)
+        end
+        
+        if r > max  then return end
+    end
+
+    --
+    
 end
 function draw_arrow(arrow,index)
     local bottom = 420
@@ -50,17 +93,16 @@ function draw_arrow(arrow,index)
     local right = 600
     for i,v in pairs(arrow) do
        -- print('draw')
-        if v == 1 then
+        if v ~= 0 then
             local d = i
             if type(d) ~= 'number' then return end
             local x =  right - d * 70
-            y = bottom-index*height   +chart_sets.offset
-           -- local y = bottom-index*500*size_factor + chart_sets.offset
-            local amount = chart_sets.size/300
-           -- print(amount)
-           -- print(i)
-            --print(x,y)
-            love.graphics.circle('fill',x,y,30)
+            y = bottom-index*height*size_factor+chart_sets.offset
+            
+            --local amount = chart_sets.size/300
+            draw_tail(v,i,x,y,index)
+            arrow_manage_asset(v,x,y)
+            
         end
     end
 end
@@ -114,6 +156,7 @@ function draw_level()
     for i,v in pairs(table) do
         --print(i)
         --size = size + 1
+        
         draw_arrow(v,v.index)
       
     end
@@ -137,19 +180,10 @@ function mod:draw()
     draw_grid()
     draw_level()
     love.graphics.pop()
+    love.graphics.rotate(0)
 end
 function _input(dt)
     local multy = 50
-    if love.keyboard.isDown('lshift') then
-        multy = 100
-    end
-    if love.keyboard.isDown('u') then 
-        chart_sets.size = chart_sets.size + 1*multy*dt
-       -- chart_sets.offset = chart_sets.offset+40*dt
-    end
-    if love.keyboard.isDown('i') then 
-        chart_sets.size = chart_sets.size - 1*multy *dt
-    end
     if love.keyboard.isDown('lshift') then
         chart_sets.total_snap = true
     else chart_sets.total_snap = false
@@ -244,18 +278,21 @@ function mod:update(dt)
 end
 function play()
     playing = not playing
+    local size_factor = chart_sets.size / 300
     if playing == true then
         old_timestep = chart_sets.offset
         if song then
-            local value = chart_sets.offset/height
+            local value = (chart_sets.offset/height) /size_factor
             if value > 0 and value <= song:getDuration() then 
                 song:seek(value,'seconds')
             end
             
         end
-        love.audio.play(song)
+        song:play()
+        --love.audio.play(song)
     else
-        love.audio.stop(song)
+        song:stop()
+        --love.audio.stop(song)
         chart_sets.offset = old_timestep
     end
 end
@@ -272,11 +309,11 @@ function mod:keypressed(key)
         end_chart()
     end
 end
-function addNote(time)
+function addNote(time,typ)
     local d = {0,0,0,0,index = time}
     if level.arrows[time] then d = level.arrows[time] end
-    d[trail] = 1
-    
+    d[trail] = typ
+    last_arrow = d
     level.arrows[time] = d
 end
 
@@ -304,7 +341,7 @@ function love.mousepressed( x, y, button, istouch, presses )
     if chart_sets.total_snap then val = time end
     if button  ==  1 then --left click
         --addNote(time)
-        addNote(val)
+        addNote(val,1)
     end
     
     --if not arrow then return end
@@ -323,11 +360,25 @@ function love.wheelmoved( x, y )
         if chart_sets.multy < 0.25 then chart_sets.multy = 0.25 end
         return
     end
-   
+    if love.keyboard.isDown('lshift') then
+        chart_sets.size = chart_sets.size + 10*y
+        --chart_sets.offset = chart_sets.offset + 10*y
+        return
+    end
     chart_sets.offset = chart_sets.offset + 10*y
     if chart_sets.offset < 0  then chart_sets.offset = 0 end
 
     
    -- chart_sets.time_offset = chart_sets.time_offset + 10*y
+end
+
+function love.mousereleased( x, y, button, istouch, presses )
+    local y = timetogrid()
+    local distance = y-last_arrow.index
+    if distance <= 0 then return end
+    if not last_arrow[trail] then return end 
+    if last_arrow[trail] == 0 then return end
+    level.arrows[last_arrow.index][trail] = 2
+    addNote(y,3)
 end
 return mod

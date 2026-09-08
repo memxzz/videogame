@@ -97,23 +97,25 @@ function draw_tail(v,x,i,arrow,index)
     local bottom = 420
     local size_factor = chart_sets.size / 300
     --local y = arrow.tails[i]+chart_sets.offset
-    
-    for r = 0,(arrow.tails[i]*10)-1 do
+    local  y = index*height*size_factor
+    for r = 0,(arrow.tails[i]*10)-2 do
         local sprite = 'longnote_start'
-        local End = false
-        
-    
-        --print(index)
-        local  y = bottom-index*height*size_factor+chart_sets.offset
-        local d = y - size_factor - 70 - r*70 --y its the friends we made along the way
-        print(index,y,r)
+        local d = bottom-(r/10)*height*size_factor+chart_sets.offset-y
+        d = d - 70*size_factor
         if r >= (arrow.tails[i]*10)-2 then 
-            sprite = 'longnote_end' 
-            --End = true
+        --    sprite = 'longnote_end' 
+            End = true
         end
         love.graphics.draw(assets[sprite],x-35,d,nil,0.1,0.1*size_factor)
-        if End then return end
+        
     end
+    local ts = bottom-arrow.tails[i]*height*size_factor+chart_sets.offset-y
+    local sprite = 'longnote_end'
+    local sprite2 = 'longnote_start'
+    love.graphics.draw(assets[sprite],x-35,ts,nil,0.1,0.1*size_factor)
+    love.graphics.draw(assets[sprite2],x-35,ts+50*size_factor,nil,0.1,0.1*size_factor)
+    --if ts <= 167 then return end
+    --love.graphics.draw(assets[sprite2],x-35,y-ts+70,nil,0.1,0.1*size_factor)
 end
 function draw_arrow(arrow,index)
     local bottom = 420
@@ -200,6 +202,7 @@ function mod:draw()
     love.graphics.push()
     love.graphics.setLineWidth(1)
     love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', size: '..tostring(chart_sets.size))
+    love.graphics.setColor(1,1,1,1)
     if exitTime > 0 then
         love.graphics.push()
         love.graphics.setColor(1,1,1,0.5)
@@ -414,5 +417,6 @@ function love.mousereleased( x, y, button, istouch, presses )
     level.arrows[last_arrow.index][trail] = 2
     tails[trail] = y-last_arrow.index
     level.arrows[last_arrow.index].tails = tails
+    print('added longnote at: '..tostring(y)..', longness: '..tostring(y-last_arrow.index))
 end
 return mod

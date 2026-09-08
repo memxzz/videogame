@@ -35,6 +35,7 @@ local elements = {
         typ = 1,
         arrowIndex,
         pressing = false,
+        dead = false,
     }
 }
 local debug = false
@@ -180,9 +181,13 @@ end
 function setPointings()
     for i,v in pairs(activeArrows.trails) do 
         local bestOfZack = 99999999
+        local bestOfZack2 = 99999999
         local target = nil
+        local tail = nil
         for d,f in pairs(v) do 
-            if f.position.y > height*4 + 600 then f = nil end
+            if f.position.y > height*4 + 600 then 
+                f = nil 
+            end
             if f ~= nil then
                 local pos1 = {
                     x = 0,
@@ -201,8 +206,12 @@ function setPointings()
                 end 
             end
         end
-        if target then input.lastPoint[i] = input.pointingTo[i] end
-        input.pointingTo[i] = target
+        if target and target.typ == 2 then 
+            input.lastPoint[i] = target 
+        else 
+            input.pointingTo[i] = target
+        end
+        
         --print(i,target)
     end
 end
@@ -229,11 +238,12 @@ function debug_tail_top(distance,pointx,pointy,index)
     love.graphics.pop()
     love.graphics.setColor(1, 1, 1, 1)
 end
-function check_trail(f)
-    print('called')
+function check_tail(f)
+    --print('called')
     if not f.arrowIndex.tails then return end
+    if f.typ ~= 2 then return end
     --if f.typ ~= 2 then return end
-    print(f.typ)
+    --print(f.typ)
 
     local scroll = confs.scrollSpeed*velMulty
     local factor =  confs.scrollSpeed/80
@@ -244,14 +254,25 @@ function check_trail(f)
     --print(b)
     ts = ts - b + g
     local distance = height*4-ts
+    local distance2 = height*4-f.position.y
 
     --local ts = arrow.position.y - tail*scroll*factor*80
     -- print(distance)
-    print('d: ',distance,f.arrowIndex.index)
-    if distance < 2000 and distance > 200  and f.pressing == true then -- -1000
-        print('miss on release')
+    --print('d: ',distance2,f.arrowIndex.index)
+    local arrow_obj = activeArrows.trails[f.trailIndex][f.activeIndex]
+    if not arrow_obj then return end
+   -- print('dead:',arrow_obj.dead)
+    if distance2 > -100 then return end
+    if distance > 200 and not arrow_obj.dead then -- -1000
+        --print('miss on release')
         ranking = 'miss' 
         addPoints('miss')
+        arrow_obj.dead = true
+        activeArrows.trails[f.trailIndex][f.activeIndex] = nil
+    else -- this is temporal
+        ranking = 'sick'
+        addPoints('sick')
+        arrow_obj.dead = true
         activeArrows.trails[f.trailIndex][f.activeIndex] = nil
     end
 end
@@ -335,7 +356,8 @@ function press(v)
     }
     local magnitud = distance(pos1,pos2)
     v.delay = magnitud
-    if v.arrowIndex[v.trailIndex] == 2 and v.pressing == false and magnitud < 1400 then
+    if v.arrowIndex[v.trailIndex] == 2 and not v.pressing and magnitud < 1400 then
+       -- print('sssasdasdkejwfi')
         v.pressing = true
         return
     end
@@ -370,11 +392,12 @@ end
 function inputRelease(key)
     result = keyTransform(key)
     if not result then return end
-    --print(input.lastPoint[result])
+    print(input.lastPoint[result])
     for i,v in pairs(input.lastPoint) do
-        if result == i then check_trail(v) end
+        if result == i then check_tail(v) end
     end
 end
+local lastpoint
 function drawTail(arrow,index)
     local scroll = confs.scrollSpeed*velMulty
     local tail = arrow.arrowIndex.tails[index]
@@ -383,12 +406,24 @@ function drawTail(arrow,index)
     for i = 0,(tail*10)-2,0.1 do
         local d = arrow.position.y -400*factor - (i)*scroll*factor*8
         --love.graphics.circle('line',arrow.position.x+50,d,40)
-        love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
+        --print(arrow.pressing)
+        if arrow.pressing then
+            if arrow.position.y < height*4 then
+                love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
+            else print('stop drawing')
+            end
+        else
+            love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
+        end
+        
     end
     local ts = arrow.position.y - tail*scroll*factor*80
     local b = (1/factor)*100
     local g = (100*(factor))
     --print(b)
+    if lastpoint ~= input.lastPoint[arrow.trailIndex] then
+        lastpoint = input.lastPoint[arrow.trailIndex]
+    end
     ts = ts - b + g
     local distance = height*4-ts
     love.graphics.draw(sprites["arrowtail_end"],arrow.position.x,ts,nil,1,1)

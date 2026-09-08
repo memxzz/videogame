@@ -5,6 +5,7 @@ local sprites = {
 }
 local levels = {
     'test',
+    'test2',
     'lasuperatto',
     'cavort',
     'U53RDV [TFR],  — 22:10 pon dance or die we xdxdxd'

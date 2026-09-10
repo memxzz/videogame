@@ -146,7 +146,7 @@ function loadLevel(name)
     local unencrypthLevel = bitser.loads(levelDataEnc)
     level = unencrypthLevel
     
-    level.bpm = 180 --this is temporal
+    --level.bpm = 180 --this is temporal
 end
 function playsong()
     started = false

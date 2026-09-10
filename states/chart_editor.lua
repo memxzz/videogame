@@ -7,7 +7,7 @@ local level = {}
 local fixed_delta = 1/60
 local arrow = {}
 local trail = 0
-local debug_bpm = 180--to delete
+--local debug_bpm = 180--to delete
 local assets = {}
 local playing = false
 local old_timestep = 0
@@ -25,6 +25,7 @@ local chart_sets = {
 local width, height, flags = love.window.getMode( )
 
 local bitser = require('libraries.bitser')
+local w_items = require('libraries.workable_items')
 local template_handler = require('modules.template_handler')
 
 function new_level()
@@ -63,34 +64,6 @@ end
 local accumu = 0
 local tails = {0,0,0,0}
 local lastPrinted = 999999
-function draw_tail_old(v,i,x,y,index)
-    if v == 1 then return end
-    --if v == 2 then tails[i] = tails[i] + 1 end
-    if v == 3 then tails[i] = index return end
-    local bottom = 420
-    local r = 0
-    local max = 20
-    local size_factor = chart_sets.size / 300
-    while true do
-        r = r + 1
-        ---local f = y-r*80 -60
-        local top = bottom - tails[i]*height*size_factor + chart_sets.offset
-        local d = y - r*70*size_factor
-        --print(d,top)
-        --if d > top then return end
-        --if d > top then print('over') end
-        if d > top then
-            love.graphics.draw(assets['longnote_start'],x-35,top+30,nil,0.1,0.1*size_factor)
-            love.graphics.draw(assets['longnote_start'],x-35,d,nil,0.1,0.1*size_factor)
-            --return
-        end
-        
-        if r > max  then return end
-    end
-
-    --
-    
-end
 function draw_tail(v,x,i,arrow,index)
     if v ~= 2 then return end
     if not arrow.tails then return end
@@ -141,7 +114,7 @@ function draw_grid()
     local x2 = 580
 
     local size_factor = chart_sets.size / 300
-    local spacing = (60 / debug_bpm)*chart_sets.multy * height * size_factor
+    local spacing = (60 / level.bpm)*chart_sets.multy * height * size_factor
 
     local referenceY = 470
     --if chart_sets.offset < 0 then referenceY = referenceY + chart_sets.offset end
@@ -191,18 +164,30 @@ function draw_level()
       
     end
 end
+function add_gui()
+    local bpm_box = w_items:add_item('textBox')
+    bpm_box.text_label = 'bpm'
+    bpm_box.position = {
+        x = width/2,
+        y = height/2
+    }
+end
 function mod:load(params)
     print('[Chart_editor]: Loaded.')
     --load_level('lasuperatto')
     load_level(params.song)
+
+   -- add_gui()
+
     print('[Chart_editor]: Level: '..tostring(level))
 end
-
 function mod:draw()
     love.graphics.push()
     love.graphics.setLineWidth(1)
-    love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', size: '..tostring(chart_sets.size))
+    love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', size: '..tostring(chart_sets.size)..', bpm: '..tostring(level.bpm))
     love.graphics.setColor(1,1,1,1)
+
+   -- workable_items:draw()
     if exitTime > 0 then
         love.graphics.push()
         love.graphics.setColor(1,1,1,0.5)
@@ -285,11 +270,6 @@ function mod:update(dt)
     set_trail(x)
     get_arrow()
     
-    
-    --print(arrow)
-    --print(trail)
-    --time = time * size_factor
-    --if time < 0 then time = 0 end
     if love.keyboard.isDown('backspace') then
         exitTime = exitTime + dt
         if exitTime > 4 then

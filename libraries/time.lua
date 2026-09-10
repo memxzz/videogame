@@ -1,4 +1,5 @@
---library made by: me :) atto.
+--library to handle tasks that need to be do after some time.
+--made by: me :) atto.
 local mod = {
     tasks = {}
 }

@@ -26,6 +26,7 @@ function mod:addTask(func,confs)
     newTask.func = func
     newTask.timeDue = confs.timeDue
     mod.tasks[#mod.tasks + 1] = newTask
+    print('added')
     return mod.tasks[#mod.tasks]
     --table.insert(mod.tasks,newTask)
 end

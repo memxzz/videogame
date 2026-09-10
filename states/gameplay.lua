@@ -150,9 +150,10 @@ function loadLevel(name)
 end
 function playsong()
     started = false
+    song:setVolume(1)
     start_task = timerModule:addTask(function()
         print('musicStart')
-        song:setPitch(velMulty)
+        --song:setPitch(velMulty)
         love.audio.play(song)
         started = true
     end,{timeDue = 2})
@@ -259,22 +260,25 @@ function check_tail(f)
     --local ts = arrow.position.y - tail*scroll*factor*80
     -- print(distance)
     --print('d: ',distance2,f.arrowIndex.index)
-    local arrow_obj = activeArrows.trails[f.trailIndex][f.activeIndex]
-    if not arrow_obj then return end
    -- print('dead:',arrow_obj.dead)
+    local arrw_obj  = activeArrows.trails[f.trailIndex][f.activeIndex]
+    
     if distance2 > -100 then return end
-    if distance > 200 and not arrow_obj.dead then -- -1000
+    if f.dead then return end
+    if distance > 200 then -- -1000
         --print('miss on release')
         ranking = 'miss' 
         addPoints('miss')
-        arrow_obj.dead = true
-        activeArrows.trails[f.trailIndex][f.activeIndex] = nil
+        f.dead = true
+        --print('s',f.dead,'miss')
+        --activeArrows.trails[f.trailIndex][f.activeIndex] = nil
     else -- this is temporal
         ranking = 'sick'
         addPoints('sick')
-        arrow_obj.dead = true
-        activeArrows.trails[f.trailIndex][f.activeIndex] = nil
+        f.dead = true
+        --activeArrows.trails[f.trailIndex][f.activeIndex] = nil
     end
+    
 end
 function moveArrows(dt)
     for i,v in pairs(activeArrows.trails) do
@@ -300,8 +304,13 @@ function moveArrows(dt)
                     local distance = height*4-ts
                     --print(distance)
                     if distance < -3000/(80/scroll) and not f.pressing then
-                        ranking = 'miss' 
-                        addPoints('miss')
+                        f.dead = true
+                        if not f.dead then
+                            
+                            ranking = 'miss' 
+                            addPoints('miss')
+                        end
+                        
                         v[d] = nil
                     end
                 end
@@ -355,18 +364,21 @@ function press(v)
         y = v.position.y
     }
     local magnitud = distance(pos1,pos2)
+    local arrw_obj  = activeArrows.trails[v.trailIndex][v.activeIndex]
     v.delay = magnitud
-    if v.arrowIndex[v.trailIndex] == 2 and not v.pressing and magnitud < 1400 then
-       -- print('sssasdasdkejwfi')
-        v.pressing = true
-        return
+    if v.arrowIndex[v.trailIndex] == 2 and magnitud < 1400 then
+        arrw_obj.pressing = true
+        --return
     end
-    if v.arrowIndex[v.trailIndex] == 2 and v.pressing == true then return end
-    if magnitud < 1400 then 
-        v.position.y = 9999 
-        activeArrows.trails[v.trailIndex][v.activeIndex] = nil
+    if magnitud < 1400  then 
+        if v.arrowIndex[v.trailIndex] == 1 then
+            v.position.y = 9999 
+            activeArrows.trails[v.trailIndex][v.activeIndex] = nil
+        end
+        
         rankings(magnitud) 
-    end 
+    end
+    --if v.arrowIndex[v.trailIndex] == 2 and arrw_obj.pressing == true then print('yey') return end
 end
 local actionList = {
     left = 4,
@@ -388,17 +400,41 @@ function inputPress(key)
     for i,v in pairs(input.pointingTo) do
         if result == i then press(v) end
     end
+    for i,v in pairs(input.lastPoint) do
+        if result == i then press(v) end
+    end
 end
 function inputRelease(key)
     result = keyTransform(key)
     if not result then return end
-    print(input.lastPoint[result])
+    --print(input.lastPoint[result])
     for i,v in pairs(input.lastPoint) do
         if result == i then check_tail(v) end
     end
 end
 local lastpoint
+function debug_scissor(x, y, sx, sy)
+    if not debug then return end
+
+    love.graphics.push("all")
+
+    love.graphics.origin()
+    love.graphics.setColor(1, 0, 0, 1)
+
+    love.graphics.rectangle("line", x, y, sx, sy)
+
+    love.graphics.pop()
+end
 function drawTail(arrow,index)
+    --print(arrow.position.x/3)
+    local x,y,sx,sy = ((4-index)*110)+150,-width/4, 110, height
+    debug_scissor(x,y,sx,sy)
+    if arrow.pressing then 
+        love.graphics.setScissor(x,y,sx,sy)
+    end
+    
+
+
     local scroll = confs.scrollSpeed*velMulty
     local tail = arrow.arrowIndex.tails[index]
     local factor =  confs.scrollSpeed/80
@@ -407,14 +443,7 @@ function drawTail(arrow,index)
         local d = arrow.position.y -400*factor - (i)*scroll*factor*8
         --love.graphics.circle('line',arrow.position.x+50,d,40)
         --print(arrow.pressing)
-        if arrow.pressing then
-            if arrow.position.y < height*4 then
-                love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
-            else print('stop drawing')
-            end
-        else
-            love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
-        end
+        love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,d,nil,1,1*factor)
         
     end
     local ts = arrow.position.y - tail*scroll*factor*80
@@ -426,10 +455,15 @@ function drawTail(arrow,index)
     end
     ts = ts - b + g
     local distance = height*4-ts
+    --if arrow.position.y > height*4 then return end
     love.graphics.draw(sprites["arrowtail_end"],arrow.position.x,ts,nil,1,1)
     debug_tail_top(distance,arrow.position.x,ts,arrow.arrowIndex.index) 
-    if factor < 0.8 then return end
-    love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,ts+700/factor,nil,1,1*factor)
+    
+    if factor > 0.8 then  
+        love.graphics.draw(sprites["arrowtail_start"],arrow.position.x,ts+700/factor,nil,1,1*factor)
+    end
+    
+    
     --love.graphics.discard(sprites["arrowtail_start"],arrow.position.x,arrow.position.y-400*factor,nil,1,1*factor)
 end
 function drawArrows()
@@ -446,7 +480,14 @@ function drawArrows()
                 drawTail(f,i)
             end
             love.graphics.draw(sprites["arrow"],f.position.x,f.position.y)
-            
+            love.graphics.setScissor()
+            --print(f.dead,f.arrowIndex.index)
+            if f.pressing and f.typ == 2 then
+                if not f.dead then 
+                    --love.graphics.draw(sprites["arrow"],f.position.x,height*4)
+                end
+                
+            end
             if f.delay and debug then
                 --print('text')
                 local num = f.delay

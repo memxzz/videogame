@@ -285,7 +285,8 @@ function moveArrows(dt)
         for d,f in pairs(v) do
             --print(i,v.position.y)
             local scroll = confs.scrollSpeed*velMulty
-            f.position.y = f.position.y + (scroll * 100) * dt
+            --f.position.y = f.position.y + (scroll * 100) * dt
+            f.position.y = time * 80/confs.scrollSpeed
             if f.position.y > height*4 + 700/(40/scroll) then 
                 --i hate hate hate hate thiss this hate this DIE
                 if f.typ ~= 2 then
@@ -306,7 +307,6 @@ function moveArrows(dt)
                     if distance < -3000/(80/scroll) and not f.pressing then
                         f.dead = true
                         if not f.dead then
-                            
                             ranking = 'miss' 
                             addPoints('miss')
                         end
@@ -537,7 +537,7 @@ function mod:draw()
 
     love.graphics.print(stringedPoints,pointsOffsetX,height/2-200,nil,1.5)
     love.graphics.print(stringedAccuracy,accuracyOffsetX,height/2-170,nil,1.5)
-    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(fixed_time)..' '..tostring(confs.scrollSpeed))
+    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(fixed_time)..' '..tostring(time)..' '..tostring(confs.scrollSpeed))
     
     
     love.graphics.push()
@@ -577,8 +577,8 @@ function fixed_update(fixed_dt)
     spawnArrow()
 end
 function mod:update(dt)
-    time = time + dt*velMulty
-    time = math.floor(time * 100 + 0.5) / 100
+    time = time + dt
+    --time = math.floor(time * 100 + 0.5) / 100
     fps = 1/dt
     if paused == false then
         moveArrows(dt)

@@ -14,7 +14,7 @@ local old_timestep = 0
 local accumulator = 0
 local song
 local last_arrow = {}
-
+local placeable = false
 local chart_sets = {
     offset = 0,
     size = 300,
@@ -166,18 +166,22 @@ function draw_level()
 end
 function add_gui()
     local bpm_box = w_items:add_item('textBox')
-    bpm_box.text_label = 'bpm'
+    print("box",bpm_box)
+    bpm_box.params.text_label = 'bpm'
     bpm_box.position = {
-        x = width/2,
-        y = height/2
+        x = width-220,
+        y = 50
     }
+    bpm_box.params.on_text_return = function(text)
+        level.bpm = tonumber(text)
+    end
 end
 function mod:load(params)
     print('[Chart_editor]: Loaded.')
     --load_level('lasuperatto')
     load_level(params.song)
 
-   -- add_gui()
+    add_gui()
 
     print('[Chart_editor]: Level: '..tostring(level))
 end
@@ -187,7 +191,7 @@ function mod:draw()
     love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', size: '..tostring(chart_sets.size)..', bpm: '..tostring(level.bpm))
     love.graphics.setColor(1,1,1,1)
 
-   -- workable_items:draw()
+    
     if exitTime > 0 then
         love.graphics.push()
         love.graphics.setColor(1,1,1,0.5)
@@ -196,6 +200,7 @@ function mod:draw()
     end
     draw_grid()
     draw_level()
+    w_items:draw()
     love.graphics.pop()
     love.graphics.rotate(0)
 end
@@ -227,11 +232,14 @@ function get_arrow()
     end
 end
 function timetogrid()
-    local spacing = (60 / debug_bpm)*chart_sets.multy
+    local spacing = (60 / level.bpm)*chart_sets.multy
     local y = math.floor(time/spacing) * spacing
     return y
 end
 function set_trail(x) --hardcoded btw
+    if x > 600 then placeable = false return end
+    if x < 263 then placeable = false return end
+    placeable = true
     if x > 285 and x < 350 then
         trail = 4
         return 
@@ -269,7 +277,7 @@ function mod:update(dt)
     time = time / size_factor - 0.25/size_factor
     set_trail(x)
     get_arrow()
-    
+    w_items:update(dt)
     if love.keyboard.isDown('backspace') then
         exitTime = exitTime + dt
         if exitTime > 4 then
@@ -313,7 +321,11 @@ function end_chart()
     local newLevel = bitser.dumps(level)
     love.filesystem.write('data/levels/newlevel.rvc',newLevel)
 end
+function love.textinput(key)
+    w_items:textinput(key)
+end
 function mod:keypressed(key)
+    w_items:keypressed(key)
     if key == 'space' then
         play()
     end
@@ -322,6 +334,7 @@ function mod:keypressed(key)
     end
 end
 function addNote(time,typ)
+    if not placeable then return end
     local d = {0,0,0,0,index = time}
     if level.arrows[time] then d = level.arrows[time] end
     d[trail] = typ
@@ -350,6 +363,7 @@ function deleteNote(timed)
 end
 function love.mousepressed( x, y, button, istouch, presses )
     local val = timetogrid()
+    w_items:mousepressed(x,y,button,istouch,presses)
     if chart_sets.total_snap then val = time end
     if button  ==  1 then --left click
         --addNote(time)

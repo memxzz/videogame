@@ -7,7 +7,6 @@ local level = {}
 local fixed_delta = 1/60
 local arrow = {}
 local trail = 0
---local debug_bpm = 180--to delete
 local assets = {}
 local playing = false
 local old_timestep = 0
@@ -27,7 +26,12 @@ local width, height, flags = love.window.getMode( )
 local bitser = require('libraries.bitser')
 local w_items = require('libraries.workable_items')
 local template_handler = require('modules.template_handler')
-
+local selecting =  false
+local selected_area = {
+    point1 = {x = 0,y = 0},
+    point2 = {x = 0,y = 0}
+}
+local selected_notes
 function new_level()
     return template_handler:get('level')
 end
@@ -49,7 +53,39 @@ function load_level(name)
     assets['longnote_end'] = love.graphics.newImage('assets/arrow_long_end.png')
     level = loaded_level
 end
+function distance ( pos1, pos2 )
+  local dx = pos1.x - pos2.x
+  local dy = pos1.y - pos2.y
+  return math.sqrt ( dx * dx + dy * dy )
+end
+function draw_selecting_box()
+    if not selecting then return end
+    
+    
+    local x,y = love.mouse.getPosition()
+    local distance = distance(selected_area.point1,{x = x,y = y})
+    if distance <= 10 then return end
+    print(distance)
+    love.graphics.push("all")
 
+    love.graphics.origin()
+    love.graphics.setColor(0,0.5,1,0.7)
+    love.graphics.rectangle('fill',
+        x,
+        y,
+        selected_area.point1.x-x,
+        selected_area.point1.y-y
+    )
+    love.graphics.setColor(0,0.3,0.8,0.8)
+    love.graphics.rectangle('line',
+        x,
+        y,
+        selected_area.point1.x-x,
+        selected_area.point1.y-y
+    )
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.pop()
+end
 function arrow_manage_asset(v,x,y)
     if v <= 2 then
         love.graphics.circle('fill',x,y,30)
@@ -200,6 +236,7 @@ function mod:draw()
     end
     draw_grid()
     draw_level()
+    draw_selecting_box()
     w_items:draw()
     love.graphics.pop()
     love.graphics.rotate(0)
@@ -364,6 +401,9 @@ end
 function love.mousepressed( x, y, button, istouch, presses )
     local val = timetogrid()
     w_items:mousepressed(x,y,button,istouch,presses)
+    selected_area.point1.x = x
+    selected_area.point1.y = y
+    if button == 1 then selecting = true  end
     if chart_sets.total_snap then val = time end
     if button  ==  1 then --left click
         --addNote(time)
@@ -388,10 +428,10 @@ function love.wheelmoved( x, y )
     end
     if love.keyboard.isDown('lshift') then
         chart_sets.size = chart_sets.size + 10*y
-        --chart_sets.offset = chart_sets.offset + 10*y
+        chart_sets.offset = chart_sets.offset + (chart_sets.offset/chart_sets.size)*10*y --the happines and wholesomeness formula
         return
     end
-    chart_sets.offset = chart_sets.offset + 10*y
+    chart_sets.offset = chart_sets.offset + 25*(300/chart_sets.size)*y
     if chart_sets.offset < 0  then chart_sets.offset = 0 end
 
     
@@ -399,6 +439,7 @@ function love.wheelmoved( x, y )
 end
 
 function love.mousereleased( x, y, button, istouch, presses )
+    if button == 1 then selecting = false  end
     if not last_arrow then return end
     if not last_arrow.index then return end
     local y = timetogrid()

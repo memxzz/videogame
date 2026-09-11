@@ -72,7 +72,7 @@ local width, height, flags = love.window.getMode( )
 local ranking = ""
 local charting = false
 local fixed_time = 0
-local velMulty = 1 --still doesnt work
+local velMulty = 1 --not it  works : )
 local paused = false
 local songName = ''
 local started = false
@@ -103,7 +103,7 @@ function addPoints(value)
     --print(stats.points,stats.accuracy)
 end
 local timed = 0
-function beat_udpate(dt)
+function beat_update(dt)
     if paused then return end
     local value = (60/level.bpm)
     if not started then timed = value level.beat = 0 return end
@@ -115,11 +115,6 @@ function beat_udpate(dt)
         --print(level.beat)
         timed = 0
     end
-end
-function playsong()
-    started = false
-    ed = 0
-
 end
 function table_clear(table)
     for i,v in pairs(table) do table[i] = nil end
@@ -134,9 +129,9 @@ function clear_arrows()
     end
 end
 function loadLevel(name)
+    time = 0
     level = template_handler:get('level')
     songName = name
-    fixed_time = 0
     reset_stats()
     clear_arrows()
     song = love.audio.newSource('assets/music/'..name..'.mp3','static')
@@ -153,10 +148,10 @@ function playsong()
     song:setVolume(1)
     start_task = timerModule:addTask(function()
         print('musicStart')
-        --song:setPitch(velMulty)
+        song:setPitch(velMulty)
         love.audio.play(song)
         started = true
-    end,{timeDue = 2})
+    end,{timeDue = 2/velMulty})
 end
 
 function shallow_copy(t)
@@ -254,29 +249,27 @@ function check_tail(f)
     local g = (100*(factor))
     --print(b)
     ts = ts - b + g
-    local distance = height*4-ts
+    local distance = ts-height*4
     local distance2 = height*4-f.position.y
-
+    local distance3 = math.sqrt(distance*distance)
     --local ts = arrow.position.y - tail*scroll*factor*80
     -- print(distance)
     --print('d: ',distance2,f.arrowIndex.index)
    -- print('dead:',arrow_obj.dead)
     local arrw_obj  = activeArrows.trails[f.trailIndex][f.activeIndex]
-    
+    --print(distance)
     if distance2 > -100 then return end
     if f.dead then return end
-    if distance > 200 then -- -1000
-        --print('miss on release')
+    if distance > -1000 then
+        local converted = math.sqrt(distance*distance)
+        if distance >= 200 then converted = 199 end
+        --print('here',distance,converted)
+        rankings(converted)
+        f.dead = true
+    else
         ranking = 'miss' 
         addPoints('miss')
         f.dead = true
-        --print('s',f.dead,'miss')
-        --activeArrows.trails[f.trailIndex][f.activeIndex] = nil
-    else -- this is temporal
-        ranking = 'sick'
-        addPoints('sick')
-        f.dead = true
-        --activeArrows.trails[f.trailIndex][f.activeIndex] = nil
     end
     
 end
@@ -284,9 +277,14 @@ function moveArrows(dt)
     for i,v in pairs(activeArrows.trails) do
         for d,f in pairs(v) do
             --print(i,v.position.y)
-            local scroll = confs.scrollSpeed*velMulty
+            local timeDiff = time-f.arrowIndex.index
+            local scroll = confs.scrollSpeed/velMulty
             --f.position.y = f.position.y + (scroll * 100) * dt
-            f.position.y = time * 80/confs.scrollSpeed
+            --f.position.y = time * 80/confs.scrollSpeed
+            local top = height*4 - scroll*200
+            local value = timeDiff*scroll*100
+            local pos = top + value
+            f.position.y = pos
             if f.position.y > height*4 + 700/(40/scroll) then 
                 --i hate hate hate hate thiss this hate this DIE
                 if f.typ ~= 2 then
@@ -323,9 +321,9 @@ end
 function spawnArrow()
     if paused then return end
     for _,arrow in pairs(level.arrows) do
-        local val = (fixed_time-arrow.index)-1
+        local val = (time-arrow.index)-1
         
-        if fixed_time >= arrow.index+1*velMulty then 
+        if time >= arrow.index+1*velMulty then 
            -- print('spawn',arrow.index)
             
             for i,v in pairs(arrow) do
@@ -366,6 +364,7 @@ function press(v)
     local magnitud = distance(pos1,pos2)
     local arrw_obj  = activeArrows.trails[v.trailIndex][v.activeIndex]
     v.delay = magnitud
+    if not arrw_obj then return end
     if v.arrowIndex[v.trailIndex] == 2 and magnitud < 1400 then
         arrw_obj.pressing = true
         --return
@@ -427,7 +426,7 @@ function debug_scissor(x, y, sx, sy)
 end
 function drawTail(arrow,index)
     --print(arrow.position.x/3)
-    local x,y,sx,sy = ((4-index)*110)+150,-width/4, 110, height
+    local x,y,sx,sy = 0,-height/3, width, height
     debug_scissor(x,y,sx,sy)
     if arrow.pressing then 
         love.graphics.setScissor(x,y,sx,sy)
@@ -472,8 +471,10 @@ function drawArrows()
    local spriteW = sprites["trail"]:getWidth()
    for i,v in pairs(activeArrows.trails) do
         for d,f in pairs(v) do
+            f.position.x = (width/0.15)/2
+            f.position.x = f.position.x - i *spriteW + 2*spriteW
        
-            f.position.x = (spriteW*2.1) - i *spriteW + width*3
+            --f.position.x = (spriteW*2.1) - i *spriteW + (width*4)
             --drawTail(f)
             love.graphics.setColor(1, 1, 1, 1)
             if f.typ == 2 then
@@ -512,7 +513,9 @@ function drawTrail()
     local spriteW = sprites["trail"]:getWidth()
     
     for i,v in pairs(activeArrows.trails) do
-        local x = (spriteW*2.1) - i *spriteW + width*3
+        local x = (width/0.15)/2
+        x = x - i *spriteW + 2*spriteW
+        --local x = (spriteW*2.1) - i *spriteW + width*3
         love.graphics.draw(sprites["trail"],x,height*4)
     end
 end
@@ -520,7 +523,7 @@ function debug_draw()
     if not debug then return end
     local y = height*4
     love.graphics.setColor(1,0,0,1)
-    love.graphics.line(800,y,4000,y)
+    love.graphics.line(width*2,y,width*4,y)
     for i,v in pairs(input.pointingTo) do
         if v then
             love.graphics.line(width*3,height*6,v.position.x+800,v.position.y+500)
@@ -537,7 +540,7 @@ function mod:draw()
 
     love.graphics.print(stringedPoints,pointsOffsetX,height/2-200,nil,1.5)
     love.graphics.print(stringedAccuracy,accuracyOffsetX,height/2-170,nil,1.5)
-    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(fixed_time)..' '..tostring(time)..' '..tostring(confs.scrollSpeed))
+    love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(time)..' '..tostring(confs.scrollSpeed))
     
     
     love.graphics.push()
@@ -563,26 +566,22 @@ function love.keyreleased(key)
     if key == confs.input.up then isDownT.up = false end
     if key == confs.input.down then isDownT.down = false end
 end
-local t = 0
 function fixed_update(fixed_dt)
-    t = t + velMulty/1
-    --print(velMulty/1)
-    if t < 1 then  return end
-    t = 0
-    if paused == false then
-        fixed_time = fixed_time + fixed_dt
-    end
-    beat_udpate(fixed_dt)
     
+    beat_update(fixed_dt)
     spawnArrow()
 end
 function mod:update(dt)
-    time = time + dt
+
+    
     --time = math.floor(time * 100 + 0.5) / 100
     fps = 1/dt
-    if paused == false then
-        moveArrows(dt)
+    if not paused then
+        time = time + dt*velMulty
+        
     end
+    
+    moveArrows(dt)
     if start_task then
         start_task.paused = paused
     end
@@ -624,6 +623,18 @@ function mod:keypressed( key )
     end
     if key == '1' then confs.scrollSpeed = confs.scrollSpeed + 5 end
     if key == '2' then confs.scrollSpeed = confs.scrollSpeed - 5 end
+    if key == '3' then 
+        time = time - 0.1 
+        if time > 0 and time <= song:getDuration() then 
+            song:seek(time,'seconds')
+        end
+    end
+    if key == '4' then 
+        time = time + 0.1 
+        if time > 0 and time <= song:getDuration() then 
+            song:seek(time,'seconds')
+        end
+    end
 
 
     if not paused then return end

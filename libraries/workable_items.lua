@@ -12,8 +12,8 @@ local params_per_type = {
     ['textBox'] = {
         text_label = 'template',
         text = '',
-        on_text_change = function() end,
-        on_text_return = function() end,
+        on_text_change = function(text) end,
+        on_text_return = function(text) end,
         on_click = function() end,
         texting = false,
     }
@@ -102,6 +102,11 @@ function mod:keypressed(key)
                 item.params.text = ''
             end
         end
+    end
+end
+function mod:clear()
+    for i,item in pairs(mod.items) do
+        mod.items[i] = nil
     end
 end
 function mod:mousepressed( x, y, button, istouch, presses )

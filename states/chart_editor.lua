@@ -65,7 +65,6 @@ function draw_selecting_box()
     local x,y = love.mouse.getPosition()
     local distance = distance(selected_area.point1,{x = x,y = y})
     if distance <= 10 then return end
-    print(distance)
     love.graphics.push("all")
 
     love.graphics.origin()
@@ -213,6 +212,7 @@ function add_gui()
     end
 end
 function mod:load(params)
+    w_items:clear()
     print('[Chart_editor]: Loaded.')
     --load_level('lasuperatto')
     load_level(params.song)
@@ -437,9 +437,31 @@ function love.wheelmoved( x, y )
     
    -- chart_sets.time_offset = chart_sets.time_offset + 10*y
 end
-
+function make_selection()
+    local p1 = selected_area.point1
+    local p2 = selected_area.point2
+    local res = p1.x-p2.x
+    local param0 = 1
+    local param1 = trail
+    local d = 1
+    if res < 0 then
+        print('left 2 right')
+        param0 = 4
+        d = -1
+    end
+    for i = param0,param1,d do
+        for i,v in pairs(level.arrows)
+            print(v)
+        end
+    end
+    print(trail)
+end
 function love.mousereleased( x, y, button, istouch, presses )
-    if button == 1 then selecting = false  end
+    if button == 1 then 
+        selected_area.point2 = {x = x,y = y}
+        if selecting then make_selection() end
+        selecting = false  
+    end
     if not last_arrow then return end
     if not last_arrow.index then return end
     local y = timetogrid()

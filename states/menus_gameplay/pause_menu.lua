@@ -26,13 +26,18 @@ function mod:draw()
     if not paused then return end
     love.graphics.push()
     love.graphics.scale(0.7,0.7)
-    love.graphics.draw(sprites['back'],width/2,height/2 - 200)
+    local w = width/2
+    w = w/0.7
+    print(w)
+    love.graphics.setColor(1,0,0,1)
+    love.graphics.draw(sprites['back'],w-200,height/2 - 200)
+    love.graphics.setColor(1,1,1,1)
     love.graphics.pop()
     for i,v in pairs(options)  do
         local text = '   '..v
         if i == index+1 then text =  '> '..v end
         mod.selected = options[index+1]
-        love.graphics.print(text,width/2 - 50,height/2 +50*i -120,nil,2)
+        love.graphics.print(text,w - 200,height/2 +50*i -120,nil,2)
     end
     
 end

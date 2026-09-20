@@ -21,4 +21,9 @@ function mod:keypressed(key)
     if actualState.keypressed == nil then return end
     actualState:keypressed(key)
 end
+function mod:textinput(key)
+    if not actualState then return end
+    if actualState.textinput == nil then return end
+    actualState:textinput(key)
+end
 return mod

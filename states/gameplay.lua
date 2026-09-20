@@ -24,6 +24,7 @@ local confs = {
 local sprites = {
     
 }
+
 local start_task
 local song
 local elements = {
@@ -72,7 +73,7 @@ local width, height, flags = love.window.getMode( )
 local ranking = ""
 local charting = false
 local fixed_time = 0
-local velMulty = 1 --not it  works : )
+local velMulty = 1 --now it  works : )
 local paused = false
 local songName = ''
 local started = false
@@ -103,18 +104,52 @@ function addPoints(value)
     --print(stats.points,stats.accuracy)
 end
 local timed = 0
+function lerp(a,b,t) return (1-t)*a + t*b end
 function beat_update(dt)
     if paused then return end
-    local value = (60/level.bpm)
-    if not started then timed = value level.beat = 0 return end
-    
-    timed = timed + dt
-    if timed >= value then 
-        level.beat = level.beat + 1
-        if level.beat > level.time_sign[2] then level.beat = 1 end
-        --print(level.beat)
-        timed = 0
+
+    local value = 60 / level.bpm
+
+    if not started then
+        timed = value
+        level.beat = 0
+        return
     end
+
+    timed = timed + dt
+
+    while timed >= value do
+        timed = timed - value
+
+        level.beat = level.beat + 1
+        if level.beat > level.time_sign[2] then
+            level.beat = 1
+        end
+    end
+end
+function draw_grid()
+    local scroll = confs.scrollSpeed/velMulty
+    local top = height*4 - scroll*200
+    
+    local spacing = (60 / level.bpm)*scroll*100
+    local count = math.ceil(height*4 / spacing) + 2
+
+
+    for i = 0, count do
+        local y = height*4
+        y = top+(time)*scroll*100 + i*spacing/velMulty
+        y = y+600
+
+
+        while y > height*8 do
+            y = y - spacing * count
+        end
+
+        if y >= 0 and y <= height*8 then
+            love.graphics.line(width*1.5,y,width*5,y)
+        end
+    end
+    
 end
 function table_clear(table)
     for i,v in pairs(table) do table[i] = nil end
@@ -219,6 +254,9 @@ function mod:load(params)
     sprites["arrowtail_start"] = love.graphics.newImage('assets/arrow_long_start.png')
     loadLevel(params.song) 
     
+end
+function love.resize( w, h )
+    width, height, flags = love.window.getMode( )
 end
 function debug_tail_top(distance,pointx,pointy,index)
     if not debug then return end
@@ -546,6 +584,7 @@ function mod:draw()
     love.graphics.push()
     love.graphics.setColor(1,1,1,1)
     love.graphics.scale(0.15, 0.15)
+    draw_grid()
     drawTrail()
     drawArrows()
     debug_draw()

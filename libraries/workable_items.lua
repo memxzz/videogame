@@ -1,12 +1,16 @@
---this library was made to handle items like textBoxes and others.
+--this library was made to handle items like textBoxes, textLabels and others.
 --made by me atto :  )
 local name = 'workable_items'
 local mod = {
-    items = {}
+    items = {},
+    states = {
+        texting = false
+    }
 }
 local itemType = {
     ['textBox'] = 1,
-    ['textLabel'] = 2
+    ['textLabel'] = 2,
+    ['list'] = 3
 }
 local params_per_type = {
     ['textBox'] = {
@@ -16,6 +20,15 @@ local params_per_type = {
         on_text_return = function() end,
         on_click = function() end,
         texting = false,
+    },
+    ['textLabel'] = {
+        text = 'template',
+    },
+    ['list'] = {
+        item_distance = 50,
+        items = {
+            template = {name = 'name',value = 'value'} --both strings
+        }
     }
 }
 local item = {
@@ -28,6 +41,8 @@ local item = {
             x = 0,
             y = 0
         },
+    background_color = {0.8,0.8,0.8,1}, --rgba, same as love2d setColor()
+    update = function() end,
     params = {}
     
 }
@@ -51,18 +66,34 @@ function on_type_draw(item)
         local x = item.position.x
         local y = item.position.y
         local height = item.size.x
+        local tExtra = ''
+        if item.params.texting then tExtra = '|' end
         if item.params.text == '' then
             love.graphics.print(item.params.text_label,x,y)
-        else love.graphics.print(item.params.text,x,y)
+        else love.graphics.print(item.params.text..tExtra,x,y)
         end
-        
+    end
+    if item.typ == itemType.textLabel then
+        local x = item.position.x
+        local y = item.position.y
+        local height = item.size.x
+        love.graphics.print(item.params.text,x,y)
+    end
+    if item.typ == itemType.list then
+        for i,element in pairs(item.params.items) do
+            local x = item.position.x
+            local y = item.position.y + i * item.params.item_distance
+            local height = item.size.x
+            love.graphics.print(element.name..'   '..element.value,x,y)
+        end
     end
 end
 function mod:draw()
     for i,item in pairs(mod.items)  do
+        local bgcolor = item.background_color
         love.graphics.push("all")
         love.graphics.origin()
-        love.graphics.setColor(0.8,0.8,0.8,1)
+        love.graphics.setColor(bgcolor[1],bgcolor[2],bgcolor[3],bgcolor[4])
         love.graphics.rectangle('fill',item.position.x,item.position.y,item.size.x,item.size.y)
         love.graphics.setColor(1,1,1,1)
         on_type_draw(item)
@@ -70,19 +101,32 @@ function mod:draw()
     end
 end
 function mod:update(dt)
-    
+    for i,item in pairs(mod.items) do
+        if item.update then
+            item.update(dt)
+        end
+    end
 end
+local lastText = ''
 function on_type_pressed(item)
+    if mod.states.texting  then return end
     if item.typ == itemType.textBox then
+        lastText = item.params.text
         item.params.text = ' '
         item.params.texting = true
+        mod.states.texting = true
     end
 end
 function mod:textinput(key)
     for i,item in pairs(mod.items) do
         if item.typ == itemType.textBox and item.params.texting then
             if key ~= 'return' and key ~= 'backspace' then
-                item.params.text = item.params.text..key
+                if item.params.text == ' ' then
+                    item.params.text = key
+                else
+                    item.params.text = item.params.text..key
+                end
+                
             end
         end 
     end
@@ -94,9 +138,15 @@ function mod:keypressed(key)
                 if key == 'backspace' then
                     item.params.text = string.sub(item.params.text, 1, -2)
                 end
+                if key == 'escape' then
+                    item.params.text = lastText
+                    mod.states.texting = false
+                    item.params.texting = false 
+                end
                 
                 item.params.on_text_change()
             else 
+                mod.states.texting = false
                 item.params.texting = false 
                 item.params.on_text_return(item.params.text)
                 item.params.text = ''
@@ -115,8 +165,13 @@ function mod:mousepressed( x, y, button, istouch, presses )
         end
     end
 end
+function mod:clear()
+    for i,v in pairs(mod.items) do
+        mod.items[i] = nil
+    end
+end
 function mod:add_item(typ)
-    if not itemType[typ] then print('['..workable_items.."]: Can't add item. Type is not acceptable.") return end
+    if not itemType[typ] then print('['..name.."]: Can't add item. Type is not acceptable.") return end
     local newItem = shallow_copy(item)
     newItem.typ = itemType[typ]
     newItem.params = shallow_copy(params_per_type[typ])

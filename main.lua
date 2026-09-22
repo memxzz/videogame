@@ -2,6 +2,7 @@ local loadStateMod = require('modules.loadState')
 
 
 function love.load()
+    love.keyboard.setTextInput(true)
     loadStateMod:loadState("mainMenu")
 end
 function love.draw()

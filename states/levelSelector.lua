@@ -4,13 +4,7 @@ local sprites = {
     
 }
 local levels = {
-    'Chiptune Madness',
-    'lasuperatto',
-    'test',
-    'test2',
-    'test3',
-    'cavort',
-    'U53RDV [TFR],  — 22:10 pon dance or die we xdxdxd'
+
 }
 local items = {
     buttons = {
@@ -26,6 +20,15 @@ local indexselect = 0
 local width, height, flags = love.window.getMode( )
 local volume = 0
 local actualSong
+local fonts = {
+    montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 30}
+}
+function reloadFontSizes()
+    local yfactor = height/600
+    for i,v in pairs(fonts) do
+        v.obj = love.graphics.newFont("assets/fonts/"..i..".ttf", v.size*yfactor)
+    end
+end
 function lerp(a,b,t) return (1-t)*a + t*b end
 function lerpPoints(a,b,t)
     return {
@@ -37,6 +40,7 @@ function button_draw()
     for i,v in pairs(items.buttons) do 
         local state = 'unselected'
         local fixedindex = (i-indexselect)
+        local yfactor = height/600
         if v.selected then state = 'selected' end
         love.graphics.push()
         love.graphics.scale(0.3, 0.3)
@@ -48,9 +52,11 @@ function button_draw()
         local sizefactor = height/600
         love.graphics.draw(sprites['button_'..state],v.position.x/0.3 - sprites['button_'..state]:getWidth()*sizefactor,v.position.y/0.3,0,sizefactor,sizefactor)
         love.graphics.pop()
-        local x = v.position.x-100 - #v.name*11--((v.position.x/0.3)+300)-#v.name*11
-        local y = v.position.y+10  --(v.position.y*0.3)+10
-        love.graphics.print(v.name,x,y,nil,1.5*sizefactor,1.5*sizefactor)
+        local offset = 300*(yfactor-1)
+        local x = v.position.x-120 - (#v.name*11) - offset--((v.position.x/0.3)+300)-#v.name*11
+        local y = v.position.y+10*yfactor  --(v.position.y*0.3)+10
+        love.graphics.setFont(fonts.montserrat.obj)
+        love.graphics.print(v.name,x,y ,nil)
     end
 end
 function button_update(dt)
@@ -71,10 +77,10 @@ function button_update(dt)
         v.position.x = lerp(v.position.x,x,10*dt)
     end
 end
-function button_add(name)
+function button_add(lvl)
     table.insert(items.buttons,{
         selected = false,
-        name = name,
+        name = lvl.name,
         alpha = 1,
         position = {
             x = width+450,
@@ -82,13 +88,31 @@ function button_add(name)
         }
     })
 end
-function load_audio(name)
-    if not name then return end
-    if love.filesystem.getInfo('assets/music/'..name..'.mp3') then
-        if assets.loaded_songs[name] then return end
-        assets.loaded_songs[name] = love.audio.newSource('assets/music/'..name..'.mp3','static')
+function load_audio(lvl)
+    if not lvl then return end
+
+    local path
+
+    if lvl.official then
+        path = "data/levels/official"
+    else
+        path = "data/levels"
+    end
+
+    local songPath = path .. "/" .. lvl.name .. "/song.mp3"
+
+    if love.filesystem.getInfo(songPath) then
+        if assets.loaded_songs[lvl.name] then
+            return
+        end
+
+        assets.loaded_songs[lvl.name] =
+            love.audio.newSource(songPath, "static")
+    else
+        print("Song not found:", songPath)
     end
 end
+
 local lastindex = -1
 local lastSong
 function play_audio(dt)
@@ -99,26 +123,54 @@ function play_audio(dt)
     if actualSong then love.audio.stop(actualSong) end
     volume = 0
     lastindex = indexselect
-    load_audio(levels[indexselect+1])
-    if not assets.loaded_songs[levels[indexselect+1]] then return end
-    local dur = assets.loaded_songs[levels[indexselect+1]]:getDuration()
-    assets.loaded_songs[levels[indexselect+1]]:seek(dur/2)
-    actualSong = assets.loaded_songs[levels[indexselect+1]] 
-    love.audio.play(assets.loaded_songs[levels[indexselect+1]])
+    local lvl = levels[indexselect+1]
+    load_audio(lvl)
+    if not assets.loaded_songs[lvl.name] then return end
+    local dur = assets.loaded_songs[lvl.name]:getDuration()
+    assets.loaded_songs[lvl.name]:seek(dur/2)
+    actualSong = assets.loaded_songs[lvl.name] 
+    love.audio.play(assets.loaded_songs[lvl.name])
     
 end
 function stop_all_songs()
     for i,v in pairs(assets.loaded_songs) do love.audio.stop(v)  end
 end
 function mod:load()
-    for i,v in pairs(levels) do load_audio(v) end
-    sprites["button_selected"] = love.graphics.newImage('assets/levelSelector/button/selected.png')
-    sprites["button_unselected"] = love.graphics.newImage('assets/levelSelector/button/unselected.png')
+    local externalLevelsPath = "data/levels"
+    if not love.filesystem.getInfo(externalLevelsPath) then
+        love.filesystem.createDirectory(externalLevelsPath)
+    end
+    local externalLevels = love.filesystem.getDirectoryItems(externalLevelsPath)
+    local officialLevels = love.filesystem.getDirectoryItems("data/levels/official")
+    for _, v in ipairs(officialLevels) do
+        table.insert(levels, {
+            official = true,
+            name = v
+        })
+    end
 
-    for i,v in pairs(levels) do
+    for _, v in ipairs(externalLevels) do
+        if v ~= 'official' and v ~= 'new song' then
+            table.insert(levels, {
+                official = false,
+                name = v
+            })
+        end
+    end
+
+    for _, v in ipairs(levels) do
+        load_audio(v)
+    end
+
+    sprites["button_selected"] = love.graphics.newImage("assets/levelSelector/button/selected.png")
+    sprites["button_unselected"] = love.graphics.newImage("assets/levelSelector/button/unselected.png")
+
+    for _, v in ipairs(levels) do
         button_add(v)
     end
+    reloadFontSizes()
 end
+
 
 function mod:draw()
     button_draw()
@@ -131,21 +183,29 @@ function mod:keypressed(key)
     if key == 'down' then indexselect = indexselect + 1 end
     if indexselect < 0 then indexselect = 0 end
     if indexselect >= #levels then indexselect = #levels -1 end
-
+    local lvl = levels[indexselect+1]
+    local path = '/data/levels'
+    if lvl.official then --this means the level  is an official level and we should load the audio from other path
+        path = 'data/levels/official' --this path
+    end
     if key == '7' then
         stop_all_songs()
-        if love.filesystem.getInfo('data/levels/'..levels[indexselect+1]..'.rvc') then 
-            loadStateMod:loadState('chart_editor',{song = levels[indexselect+1]})
+        
+        if love.filesystem.getInfo(path..'/'..lvl.name..'/chart.rvc') then 
+            loadStateMod:loadState('chart_editor',{song = lvl.name,path = path})
         end
     end
     if key == "return" then
         stop_all_songs()
-        if love.filesystem.getInfo('data/levels/'..levels[indexselect+1]..'.rvc') then 
-            loadStateMod:loadState('gameplay',{song = levels[indexselect+1]})
+        if love.filesystem.getInfo(path..'/'..lvl.name..'/chart.rvc') then 
+            loadStateMod:loadState('gameplay',{song = lvl.name,path = path})
         end
     end
 end
-
+function love.resize( w, h )
+    width, height, flags = love.window.getMode( )
+    reloadFontSizes()
+end
 function mod:update(dt)
     button_update(dt)
     play_audio(dt)

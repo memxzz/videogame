@@ -4,13 +4,15 @@ local name = 'workable_items'
 local mod = {
     items = {},
     states = {
-        texting = false
+        texting = false,
+        adding_file = false
     }
 }
 local itemType = {
     ['textBox'] = 1,
     ['textLabel'] = 2,
-    ['list'] = 3
+    ['list'] = 3,
+    ['fileBox'] = 4
 }
 local params_per_type = {
     ['textBox'] = {
@@ -21,13 +23,22 @@ local params_per_type = {
         on_click = function() end,
         texting = false,
     },
+    ['fileBox'] = {
+        dialog_settings = {
+            title = 'Title'
+        },
+        text_label = 'template',
+        file,
+        on_dialog_end = function(files,filtername,errorstring) end,
+        adding_file = false,
+    },
     ['textLabel'] = {
         text = 'template',
     },
     ['list'] = {
-        item_distance = 50,
+        item_distance = 20,
         items = {
-            template = {name = 'name',value = 'value'} --both strings
+            {name = 'name',value = 'value'} --both strings
         }
     }
 }
@@ -73,6 +84,16 @@ function on_type_draw(item)
         else love.graphics.print(item.params.text..tExtra,x,y)
         end
     end
+    if item.typ == itemType.fileBox then
+        local x = item.position.x
+        local y = item.position.y
+        local height = item.size.x
+        --if not item.params.file then
+            love.graphics.print(item.params.text_label,x,y)
+        --else 
+        --    love.graphics.print(item.params.file,x,y)
+        --end
+    end
     if item.typ == itemType.textLabel then
         local x = item.position.x
         local y = item.position.y
@@ -82,8 +103,9 @@ function on_type_draw(item)
     if item.typ == itemType.list then
         for i,element in pairs(item.params.items) do
             local x = item.position.x
-            local y = item.position.y + i * item.params.item_distance
+            local y = item.position.y + (i-1) * item.params.item_distance
             local height = item.size.x
+            item.size.y = (i) * item.params.item_distance
             love.graphics.print(element.name..'   '..element.value,x,y)
         end
     end
@@ -105,22 +127,43 @@ function mod:update(dt)
         if item.update then
             item.update(dt)
         end
+        if item.typ == itemType.list then
+            for d,element in pairs(item.params.items) do
+                if element.update then
+                    element.update(dt,element)
+                end
+            end
+        end
     end
 end
 local lastText = ''
 function on_type_pressed(item)
     if mod.states.texting  then return end
+    if mod.states.adding_file then return end
     if item.typ == itemType.textBox then
         lastText = item.params.text
         item.params.text = ' '
         item.params.texting = true
         mod.states.texting = true
     end
+    if item.typ == itemType.fileBox then
+        item.params.adding_file = true
+        mod.states.adding_file = true
+        local file = love.window.showFileDialog(
+            'openfile',
+            function(files,filtername,errorstring) 
+                item.params.adding_file = false
+                mod.states.adding_file = false
+                item.params.on_dialog_end(files,filtername,errorstring)
+            end,
+            item.params.dialog_settings
+        )
+    end
 end
 function mod:textinput(key)
     for i,item in pairs(mod.items) do
         if item.typ == itemType.textBox and item.params.texting then
-            if key ~= 'return' and key ~= 'backspace' then
+            if key ~= 'return' and key ~= 'backspace' then     
                 if item.params.text == ' ' then
                     item.params.text = key
                 else

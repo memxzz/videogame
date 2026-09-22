@@ -13,7 +13,7 @@ local template_handler = require('modules.template_handler')
 local pause_menu = require('states.menus_gameplay.pause_menu')
 ------------
 local confs = {
-    scrollSpeed = 80, --default 40
+    scrollSpeed = 95, --default 40
     input = {
         left = 'z',
         down = 'x',
@@ -24,6 +24,7 @@ local confs = {
 local sprites = {
     
 }
+local sfxs = {}
 
 local start_task
 local song
@@ -57,7 +58,6 @@ local input = {
     },
 }
 local level = {}
-
 local activeArrows = {
     trails = {
         [1] = {},
@@ -71,7 +71,7 @@ local longNotes = {}
 local accumulator = 0.0
 local width, height, flags = love.window.getMode( )
 local ranking = ""
-local charting = false
+local charting
 local fixed_time = 0
 local velMulty = 1 --now it  works : )
 local paused = false
@@ -95,12 +95,33 @@ local stats_template = {
         miss = 0
     }
 }
+local fonts = {
+    montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
+}
+function reloadFontSizes()
+    local yfactor = height/600
+    for i,v in pairs(fonts) do
+        if v.resize then
+            v.obj = love.graphics.newFont("assets/fonts/"..i..".ttf", v.size*yfactor)
+        else
+            v.obj = love.graphics.newFont("assets/fonts/"..i..".ttf", v.size)
+        end
+        
+    end
+end
+function loadSfxs()
+    sfxs.miss = love.audio.newSource('assets/sfx/miss.mp3','static')
+end
 function addPoints(value)
     stats.points = stats.points + rankinValues[value]
     stats.bestPossiblePoints = stats.bestPossiblePoints + rankinValues.sick
     stats.rankins[value] = stats.rankins[value] + 1
     stats.accuracy = (stats.points/stats.bestPossiblePoints)*100
     if stats.accuracy < 0 then stats.accuracy = 0 end
+    if value == 'miss' then
+        love.audio.stop(sfxs.miss)
+        love.audio.play(sfxs.miss)
+    end
     --print(stats.points,stats.accuracy)
 end
 local timed = 0
@@ -133,7 +154,7 @@ function draw_grid()
     
     local spacing = (60 / level.bpm)*scroll*100
     local count = math.ceil(height*4 / spacing) + 2
-
+    local trailsQuantity = #input.pointingTo
 
     for i = 0, count do
         local y = height*4
@@ -146,7 +167,10 @@ function draw_grid()
         end
 
         if y >= 0 and y <= height*8 then
-            love.graphics.line(width*1.5,y,width*5,y)
+            local x = (width/0.15)/2
+            local size = 800
+            x = x - 4 *size + 2*size
+            love.graphics.line(x,y,x+4*size,y)
         end
     end
     
@@ -163,24 +187,11 @@ function clear_arrows()
         table_clear(v)
     end
 end
-function loadLevel(name)
-    time = 0
-    level = template_handler:get('level')
-    songName = name
-    reset_stats()
-    clear_arrows()
-    song = love.audio.newSource('assets/music/'..name..'.mp3','static')
-    playsong()
-    if charting == true then return end
-    local levelDataEnc = love.filesystem.read('data/levels/'..name..'.rvc')
-    local unencrypthLevel = bitser.loads(levelDataEnc)
-    level = unencrypthLevel
-    
-    --level.bpm = 180 --this is temporal
-end
+
 function playsong()
     started = false
     song:setVolume(1)
+    song:seek(time,'seconds')
     start_task = timerModule:addTask(function()
         print('musicStart')
         song:setPitch(velMulty)
@@ -246,17 +257,44 @@ function setPointings()
         --print(i,target)
     end
 end
+function loadLevel(name,path)
+    if not love.filesystem.getInfo(path..'/'..name..'/song.mp3') then 
+        print("[gameplay]: "..path..'/'..name.."/song.mp3 doesn't exist.") 
+        loadStateMod:loadState('levelSelector')
+        return 
+    end
+    if not charting then time = 0 end
+    level = template_handler:get('level')
+    songName = name
+    reset_stats()
+    clear_arrows()
+    song = love.audio.newSource(path..'/'..name..'/song.mp3','static')
+    playsong()
+    if charting == true then return end
+    
+    local levelDataEnc = love.filesystem.read(path..'/'..name..'/chart.rvc')
+    local unencrypthLevel = bitser.loads(levelDataEnc)
+    level = unencrypthLevel
+end
 function mod:load(params)
     pause_menu:load()
     sprites["trail"] = love.graphics.newImage('assets/trail.png')
     sprites["arrow"] = love.graphics.newImage('assets/arrow.png')
     sprites["arrowtail_end"] = love.graphics.newImage('assets/arrow_long_end.png')
     sprites["arrowtail_start"] = love.graphics.newImage('assets/arrow_long_start.png')
-    loadLevel(params.song) 
+    charting = params.charting
+    if charting then
+        time = params.charting.time
+
+    end
+    reloadFontSizes()
+    loadSfxs()
+    loadLevel(params.song,params.path) 
     
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
+    pause_menu:resize(w,h)
 end
 function debug_tail_top(distance,pointx,pointy,index)
     if not debug then return end
@@ -273,29 +311,20 @@ function debug_tail_top(distance,pointx,pointy,index)
     love.graphics.setColor(1, 1, 1, 1)
 end
 function check_tail(f)
-    --print('called')
     if not f.arrowIndex.tails then return end
     if f.typ ~= 2 then return end
-    --if f.typ ~= 2 then return end
-    --print(f.typ)
-
     local scroll = confs.scrollSpeed*velMulty
     local factor =  confs.scrollSpeed/80
     local tail = f.arrowIndex.tails[f.trailIndex]
     local ts = f.position.y - tail*scroll*factor*80
     local b = (1/factor)*100
     local g = (100*(factor))
-    --print(b)
     ts = ts - b + g
     local distance = ts-height*4
     local distance2 = height*4-f.position.y
     local distance3 = math.sqrt(distance*distance)
-    --local ts = arrow.position.y - tail*scroll*factor*80
-    -- print(distance)
-    --print('d: ',distance2,f.arrowIndex.index)
-   -- print('dead:',arrow_obj.dead)
+
     local arrw_obj  = activeArrows.trails[f.trailIndex][f.activeIndex]
-    --print(distance)
     if distance2 > -100 then return end
     if f.dead then return end
     if distance > -1000 then
@@ -308,10 +337,14 @@ function check_tail(f)
         ranking = 'miss' 
         addPoints('miss')
         f.dead = true
+        
     end
     
 end
+local inmunity = 1
 function moveArrows(dt)
+    inmunity = inmunity - dt
+    if inmunity <= 0 or not charting then inmunity =  0 end
     for i,v in pairs(activeArrows.trails) do
         for d,f in pairs(v) do
             --print(i,v.position.y)
@@ -323,13 +356,17 @@ function moveArrows(dt)
             local value = timeDiff*scroll*100
             local pos = top + value
             f.position.y = pos
+            if inmunity > 0 then v[d] = nil end
             if f.position.y > height*4 + 700/(40/scroll) then 
                 --i hate hate hate hate thiss this hate this DIE
                 if f.typ ~= 2 then
-                    ranking = 'miss' 
-                    addPoints('miss')
+                    if inmunity <= 0 then
+                        ranking = 'miss' 
+                        addPoints('miss')
+                    end
+                    
                     v[d] = nil
-                elseif f.typ == 2 then
+                elseif f.typ == 2 and f.trailIndex then
                     local scroll = confs.scrollSpeed*velMulty
                     local factor =  confs.scrollSpeed/80
                     local ts = f.position.y - f.arrowIndex.tails[f.trailIndex]*scroll*factor*80
@@ -342,7 +379,7 @@ function moveArrows(dt)
                     --print(distance)
                     if distance < -3000/(80/scroll) and not f.pressing then
                         f.dead = true
-                        if not f.dead then
+                        if not f.dead and inmunity <= 0 then
                             ranking = 'miss' 
                             addPoints('miss')
                         end
@@ -360,8 +397,9 @@ function spawnArrow()
     if paused then return end
     for _,arrow in pairs(level.arrows) do
         local val = (time-arrow.index)-1
+        local gTime = arrow.index+1*velMulty
         
-        if time >= arrow.index+1*velMulty then 
+        if time >= gTime then 
            -- print('spawn',arrow.index)
             
             for i,v in pairs(arrow) do
@@ -386,8 +424,8 @@ end
 function rankings(magnitud)
     local scroll = confs.scrollSpeed*velMulty
     if magnitud < 100/(40/scroll)  then ranking = 'sick' addPoints('sick') return end
-    if magnitud < 600/(40/scroll)  then ranking = 'good' addPoints('good') return end
-    if magnitud < 1100/(40/scroll) then ranking = 'bad' addPoints('bad') return end
+    if magnitud < 300/(40/scroll)  then ranking = 'good' addPoints('good') return end
+    if magnitud < 600/(40/scroll) then ranking = 'bad' addPoints('bad') return end
 end
 function press(v)
     if v  == nil then return end
@@ -465,7 +503,7 @@ end
 function drawTail(arrow,index)
     --print(arrow.position.x/3)
     local x,y,sx,sy = 0,-height/3, width, height
-    debug_scissor(x,y,sx,sy)
+    --debug_scissor(x,y,sx,sy)
     if arrow.pressing then 
         love.graphics.setScissor(x,y,sx,sy)
     end
@@ -570,6 +608,7 @@ function debug_draw()
     love.graphics.setColor(1,1,1,1)
 end
 function mod:draw()
+    love.graphics.setFont(fonts.montserrat.obj)
     love.graphics.print(ranking,width/2 - 50,height/2 -50,nil,2)
     local stringedPoints = 'points: '..tostring(stats.points)
     local stringedAccuracy = 'accuracy: '..tostring(math.floor(stats.accuracy * 100 + 0.5) / 100).."%"
@@ -645,9 +684,22 @@ function pause_menu_selection(option)
     end
     if option == 'reset' then
         paused = false
-        loadLevel(songName)
+        if charting  then
+            inmunity = 1
+            time = charting.time
+        end
+        
+        loadLevel(songName,'data/levels')
     end
     if option == 'exit' then
+        if charting then
+            loadStateMod:loadState('chart_editor',{
+                song = songName,
+                path = 'data/levels',
+                charting = charting
+            })
+            return
+        end
         loadStateMod:loadState('levelSelector')
         return
     end
@@ -660,6 +712,7 @@ function mod:keypressed( key )
         love.audio.pause(song)
         paused = true
     end
+    if key == 't' then debug = not debug end
     if key == '1' then confs.scrollSpeed = confs.scrollSpeed + 5 end
     if key == '2' then confs.scrollSpeed = confs.scrollSpeed - 5 end
     if key == '3' then 

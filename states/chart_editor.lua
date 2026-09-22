@@ -39,17 +39,36 @@ local selected_area = {
     point2 = {x = 0,y = 0,time}
 }
 local selected_notes = {}
+local history = {
+    
+}
+local copied_group = {
+    
+}
+local fonts = {
+    montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
+}
+function reloadFontSizes()
+    local yfactor = height/600
+    for i,v in pairs(fonts) do
+        if v.resize then
+            v.obj = love.graphics.newFont("assets/fonts/"..i..".ttf", v.size*yfactor)
+        else
+            v.obj = love.graphics.newFont("assets/fonts/"..i..".ttf", v.size)
+        end
+        
+    end
+end
 function new_level()
     return template_handler:get('level')
 end
-function load_level_fromfile(name)
-    local levelDataEnc = love.filesystem.read('data/levels/'..name..'.rvc')
+function load_level_fromfile(name,path)
+    local levelDataEnc = love.filesystem.read(path..'/'..name..'/chart.rvc')
     local unencrypthLevel = bitser.loads(levelDataEnc)
     return unencrypthLevel 
 end
 function loadAudioSamples()
     local nTable = {}
-
     local count = songData:getSampleCount()*2
     local sampleRate = songData:getSampleRate()
     local duration = songData:getDuration()
@@ -64,25 +83,23 @@ function loadAudioSamples()
             time = (i / sampleRate)/2
         })
     end
-
     soundSamples = nTable
 
     print("duration:", songData:getDuration())
     print("last wave time:", soundSamples[#soundSamples].time)
     print("sample count:", songData:getSampleCount())
     print("sample rate:", songData:getSampleRate())
-
-
 end
 
 
-function load_level(name)
+function load_level(name,path)
     local loaded_level
+    if not path then path = 'data/levels' end
     if name == nil then loaded_level = new_level() end
-    if name then loaded_level = load_level_fromfile(name) end
-    if not name then name = 'lasuperatto' end
-    song = love.audio.newSource('assets/music/'..name..'.mp3','static')
-    songData = love.sound.newSoundData('assets/music/'..name..'.mp3')
+    if name then loaded_level = load_level_fromfile(name,path) end
+    if not name then name = 'new song' end
+    song = love.audio.newSource(path..'/'..name..'/song.mp3','static')
+    songData = love.sound.newSoundData(path..'/'..name..'/song.mp3')
     loadAudioSamples()
     assets['longnote_start'] = love.graphics.newImage('assets/arrow_long_start.png')
     assets['longnote_end'] = love.graphics.newImage('assets/arrow_long_end.png')
@@ -96,8 +113,6 @@ function distance ( pos1, pos2 )
 end
 function draw_selecting_box()
     if not selecting then return end
-    
-    
     local x,y = love.mouse.getPosition()
     local distance = distance(selected_area.point1,{x = x,y = y})
     if distance <= 10 then return end
@@ -170,24 +185,39 @@ function draw_soundWave()
     local currentY = timeToY(currentSample.time - wavetime)
     local centerOffset = centerY - currentY
 
-    local first = math.max(1, currentIndex - 60)
-    local last = math.min(#soundSamples, currentIndex + 300)
+    local first = math.max(1, currentIndex - #soundSamples/2)
+    local last = math.min(#soundSamples, currentIndex + #soundSamples/2)
 
     love.graphics.setColor(0, 0, 1, 1)
     love.graphics.setLineWidth(5)
-
+    local lastI = 0
     for i = first, last - 1 do
+        if not soundSamples[i] then -- to prevent thingis
+            --print('[WARNING]: s1 might not exist')
+            
+            love.graphics.line(
+                centerX, 0,
+                centerX, centerY+200
+            )
+            love.graphics.setColor(1,0,0,1)
+            love.graphics.print('[WARNING]: Due to an error, the soundwave might not render properly.',width/2 - 200,height/2)
+            love.graphics.setColor(1,1,1,1)
+            return
+        end
         local s1 = soundSamples[i]
         local s2 = soundSamples[i + 1]
         local y1 = timeToY(s1.time - wavetime)
         local y2 = timeToY(s2.time - wavetime)
         local x1 = centerX + s1.value * amplitude
         local x2 = centerX + s2.value * amplitude
-
-        love.graphics.line(
-            x1, y1+65,
-            x2, y2+65
-        )
+        local offset = 65
+        if y1 < height and y1 > -80 then -- we do this so it only renders what's visible.
+            love.graphics.line(
+                x1, y1+offset,
+                x2, y2+offset
+            )
+        end
+        
     end
 
     love.graphics.setLineWidth(1)
@@ -227,15 +257,18 @@ end
 local accumu = 0
 local tails = {0,0,0,0}
 local lastPrinted = 999999
-function draw_tail(v,x,i,arrow,index)
+function draw_tail(v,x,i,arrow,index,ry)
     if v ~= 2 then return end
     if not arrow.tails then return end
-    love.graphics.setColor(1,1,1,1)
     local bottom = height-200
     local size_factor = chart_sets.size / 300
     local sm = height/600
+    local y = index*height*size_factor
+    local ts = bottom-arrow.tails[i]*height*size_factor+chart_sets.offset-y
+    if ts > height then return end --so we dont  draw anything we dont need
+    if ry < -70 then return end
+    love.graphics.setColor(1,1,1,1)
     --local y = arrow.tails[i]+chart_sets.offset
-    local  y = index*height*size_factor
     for r = 0,(arrow.tails[i]*10)-1 do
         local sprite = 'longnote_start'
         local d = bottom-(r/10)*height*size_factor+chart_sets.offset-y
@@ -243,7 +276,7 @@ function draw_tail(v,x,i,arrow,index)
         love.graphics.draw(assets[sprite],x-35,d-35,nil,0.1,0.1*size_factor*sm)
         
     end
-    local ts = bottom-arrow.tails[i]*height*size_factor+chart_sets.offset-y
+    
     local sprite = 'longnote_end'
     local sprite2 = 'longnote_start'
     love.graphics.draw(assets[sprite],x-35,ts,nil,0.1,0.1*size_factor)
@@ -269,11 +302,15 @@ function draw_arrow(arrow,index)
             if type(d) ~= 'number' then return end
             local x =  right - d * 70
             local y = bottom-index*height*size_factor+chart_sets.offset
+            if y < height+70 and y > -70 then
+                
+                arrow_manage_asset(v,x,y,index)
+                debug_arrow_draw(x,y,index)
+            end
+            draw_tail(v,x,i,arrow,index,y)
             
             --local amount = chart_sets.size/300
-            draw_tail(v,x,i,arrow,index)
-            arrow_manage_asset(v,x,y,index)
-            debug_arrow_draw(x,y,index)
+            
             
         end
     end
@@ -336,21 +373,51 @@ function draw_level()
     local d = 0
     --size = 0
     for i,v in pairs(level.arrows) do
-        --size = size + 1
         d = d + 1
         v.index = i
         table[d] = v
     end
     for i,v in pairs(table) do
-        --print(i)
-        --size = size + 1
-        
         draw_arrow(v,v.index)
       
     end
 end
+function copyFile(source, destination)
+    local file = io.open(source, "rb")
+
+    if not file then
+        return false, "No se pudo abrir el archivo"
+    end
+
+    local data = file:read("*a")
+    file:close()
+
+    local success, err = love.filesystem.write(destination, data)
+
+    if not success then
+        return false, err
+    end
+
+    return true
+end
+
+function setLevelAudio(files,filtername,errorstring)
+    if #files == 0 then return end
+    local path = files[1]
+    local extension = path:match("%.([^%.]+)$")
+    extension = extension:lower()
+    if extension ~= 'mp3' then return end -- TODO: add a dialogue to tell the user that only mp3 is supported.
+    local dest = 'data/levels/' .. level_name
+
+    love.filesystem.createDirectory(dest)
+    dest = 'data/levels/' .. level_name..'/song.mp3'
+    local succ = copyFile(path,dest)
+
+    load_level(level_name,'data/levels/')
+end
 function add_gui()
     w_items:clear()
+    love.graphics.setFont(fonts.montserrat.obj)
     local bpm_box = w_items:add_item('textBox')
     bpm_box.params.text_label = 'bpm'
     bpm_box.position = {
@@ -360,6 +427,17 @@ function add_gui()
     bpm_box.params.on_text_return = function(text)
         level.bpm = tonumber(text)
     end
+    local fileBox = w_items:add_item('fileBox')
+    fileBox.params.text_label = 'level audio'
+    fileBox.params.dialog_settings = {
+        title = 'Select audio',
+    }
+    fileBox.params.on_dialog_end = setLevelAudio
+    fileBox.position = {
+        x = width-220,
+        y = 180
+    }
+
     local lvlname_box = w_items:add_item('textBox')
     lvlname_box.params.text_label = 'level name'
     lvlname_box.position = {
@@ -369,18 +447,28 @@ function add_gui()
     lvlname_box.params.on_text_return = function(text)
         level_name = text
     end
-    local lvlname_text = w_items:add_item('textLabel')
-    lvlname_text.params.text = level_name
-    lvlname_text.position.y = 50
-    lvlname_text.update = function() 
-        lvlname_text.params.text = level_name 
-    end
+    local level_details = w_items:add_item('list')
+    level_details.position.y = 50
+    level_details.params.items = {
+        {name = 'Name: ',value = level_name, update = function(dt,item) item.value = level_name end},
+        {name = 'BPM: ',value = level.bpm,update = function(dt,item) item.value = level.bpm end},
+        {name = 'Time Signature: ',value = '4/4',update = function(dt,item) 
+            local time_sign = tostring(level.time_sign[1])..'/'..tostring(level.time_sign[2])
+            item.value = time_sign
+        end}
+    }
 end
 function mod:load(params)
     print('[Chart_editor]: Loaded.')
-    load_level(params.song)
+    load_level(params.song,params.path)
+    reloadFontSizes()
     add_gui()
+    
     print('[Chart_editor]: Level: '..tostring(level))
+
+    if params.charting then
+        chart_sets = params.charting.chart_sets
+    end
 end
 function mod:draw()
     love.graphics.push()
@@ -430,9 +518,11 @@ function get_arrow()
         
     end
 end
-function timetogrid()
+function timetogrid(custom)
+    local use = time
+    if custom  then use = custom end
     local spacing = (60 / level.bpm)*chart_sets.multy
-    local y = math.floor(time/spacing) * spacing
+    local y = math.floor(use/spacing) * spacing
     return y
 end
 function set_trail(x) --fixed
@@ -522,25 +612,89 @@ function play()
     end
 end
 function end_chart()
-    print('[Chart_editor]: Saved level as ['..level_name..'].')
+    if w_items.texting then return end
+    print('[Chart_editor]: Saved level as [' .. level_name .. '].')
     local newLevel = bitser.dumps(level)
-    love.filesystem.write('data/levels/'..level_name..'.rvc',newLevel)
+    local path = 'data/levels/' .. level_name
+
+    love.filesystem.createDirectory(path)
+
+    local success, message = love.filesystem.write(
+        path .. '/chart.rvc',
+        newLevel
+    )
+
+    if not success then
+        print('[Chart_editor]: Error saving chart: ' .. tostring(message))
+    end
 end
+
 function mod:textinput(key)
     w_items:textinput(key)
 end
 
+function return_back_history()
+    print('return')
+    local index = #history
+    local items = history[index]
+    if not items then 
+        print('[chart_editor]: Nothing to restore.')
+        return 
+    end
+    for i,v in pairs(items) do
+        for d,r in pairs(v.value) do print(d,r) end
+        level.arrows[v.time] = v.value
+    end
 
+    history[index] = nil
+end
 function selecting_combos(key)
+    local items = {}
     if key == 'backspace' then
         for time,arrow in pairs(selected_notes) do
+            local copy = shallow_copy(level.arrows[time])
+            items[#items + 1] = {time = time, value = copy}
+           -- table.insert(items,{time = time, value = copy})
             for i,v in pairs(arrow) do
                 if v ~= 0 then
                     level.arrows[time][i] = 0
                 end
             end
         end
+        history[#history + 1] = items
     end
+
+
+end
+function copy_selected()
+    copied_group = {}
+    for i,v in pairs(selected_notes) do
+        copied_group[i] = shallow_copy(level.arrows[i])
+    end
+end
+function paste_selected()
+    local first = 9999999999
+    local old_state = {}
+    for gtime,group in pairs(copied_group) do
+        if gtime < first then
+            first = gtime
+        end
+    end
+    for gtime,group in pairs(copied_group) do
+        
+        local difference = gtime-first
+        local newTime = time + difference
+        newTime = timetogrid(newTime)
+        local oldValue = level.arrows[newTime]
+        if not oldValue then  oldValue  = {0,0,0,0} end
+        old_state[#old_state+1] =  {time = newTime,value = oldValue}
+        level.arrows[newTime] = group
+        
+    end
+    history[#history+1] = old_state
+    selected_notes = {}
+    copied_group = {}
+
 end
 function mod:keypressed(key)
     w_items:keypressed(key)
@@ -552,6 +706,26 @@ function mod:keypressed(key)
     if key == 'space' then
         play()
     end
+    if love.keyboard.isDown('lctrl') then
+        if key == 'z' then
+            return_back_history()
+        end
+        if key == 'c' then
+            copy_selected()
+        end
+        if key == 'v' then
+            paste_selected()
+        end
+        if key == 'return' then
+            local desiredTime = time -1
+            if desiredTime <= 0 then desiredTime = 0 end
+            loadStateMod:loadState('gameplay',{song = level_name,path = 'data/levels',charting = {
+                time = desiredTime,
+                chart_sets = chart_sets
+            }})
+        end
+    end
+
     if key == 'return' then
         end_chart()
     end
@@ -586,9 +760,13 @@ end
 function deleteNote(timed)
     if not level.arrows[timed] then print('[f: deleteNote]: No arrow section for {t: '..tostring(timed)..'}.') return end
     local d = {0,0,0,0,index = timed}
-    if level.arrows[timed] then d = level.arrows[timed] end
+    if level.arrows[timed] then 
+        d = level.arrows[timed] 
+    end
+    history[#history + 1] = {{time = timed,value = shallow_copy(d)}}
     d[trail] = 0
     level.arrows[timed] = d
+    
 end
 function love.mousepressed( x, y, button, istouch, presses )
     local val = timetogrid()
@@ -640,6 +818,7 @@ end
 function love.resize( w, h )
     w_items:clear()
     width, height, flags = love.window.getMode( )
+    reloadFontSizes()
     add_gui()
 end
 function unselect()
@@ -648,7 +827,9 @@ function unselect()
     end
 end
 function set_selected()
-    unselect()
+    if not love.keyboard.isDown('lshift') then
+        unselect()
+    end 
     local start_trail = selected_area.start_trail
     local end_trail = trail
     local time1 = selected_area.point1.time
@@ -673,7 +854,7 @@ function love.mousereleased( x, y, button, istouch, presses )
     if button == 1 then 
         selected_area.point2.time = time
         if selecting then set_selected() end
-        selecting = false  
+        selecting = false 
     end
 
     --add longnote

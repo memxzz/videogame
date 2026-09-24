@@ -40,7 +40,7 @@ end
 function mod:reset()
     index = 0
 end
-function mod:draw()
+function mod:draw() 
     if not paused then return end
     love.graphics.setFont(fonts.montserrat.obj)
     love.graphics.push('all')

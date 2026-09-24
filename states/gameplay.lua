@@ -7,20 +7,13 @@ local loadStateMod = require('modules.loadState')
 local timerModule = require('libraries.time')
 local bitser = require('libraries.bitser')
 local template_handler = require('modules.template_handler')
------------
-
+local w_items = require('libraries.workable_items')
+--modules
+local conf_manager = require('modules.configuration_manager')
 --submenus
 local pause_menu = require('states.menus_gameplay.pause_menu')
 ------------
-local confs = {
-    scrollSpeed = 95, --default 40
-    input = {
-        left = 'z',
-        down = 'x',
-        up = 'k',
-        right = 'l'
-    }
-}
+local confs = {}
 local sprites = {
     
 }
@@ -149,7 +142,7 @@ function beat_update(dt)
     end
 end
 function draw_grid()
-    local scroll = confs.scrollSpeed/velMulty
+    local scroll = confs.gameplay.scrollSpeed/velMulty
     local top = height*4 - scroll*200
     
     local spacing = (60 / level.bpm)*scroll*100
@@ -276,8 +269,22 @@ function loadLevel(name,path)
     local unencrypthLevel = bitser.loads(levelDataEnc)
     level = unencrypthLevel
 end
+function add_gui()
+    w_items:clear()
+    local data_list = w_items:add_item('list')
+    data_list.position.y = height/2-100
+    data_list.background_color = {0,0,0,0}
+    data_list.params.items = {
+        {name = 'Name: ',value = songName, update = function(dt,item) item.value = songName end},
+        {name = 'Points: ',value = stringedPoints, update = function(dt,item) item.value = tostring(stats.points) end},
+        {name = 'Accuracy: ',value = stringedAccuracy, update = function(dt,item) item.value = tostring(math.floor(stats.accuracy * 100 + 0.5) / 100).."%" end},
+        {name = 'Misses: ',value = stats.rankins.miss, update = function(dt,item) item.value = stats.rankins.miss end},
+    }
+end
 function mod:load(params)
+    confs = conf_manager:get_data()
     pause_menu:load()
+    
     sprites["trail"] = love.graphics.newImage('assets/trail.png')
     sprites["arrow"] = love.graphics.newImage('assets/arrow.png')
     sprites["arrowtail_end"] = love.graphics.newImage('assets/arrow_long_end.png')
@@ -290,7 +297,7 @@ function mod:load(params)
     reloadFontSizes()
     loadSfxs()
     loadLevel(params.song,params.path) 
-    
+    add_gui()
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
@@ -313,8 +320,8 @@ end
 function check_tail(f)
     if not f.arrowIndex.tails then return end
     if f.typ ~= 2 then return end
-    local scroll = confs.scrollSpeed*velMulty
-    local factor =  confs.scrollSpeed/80
+    local scroll = confs.gameplay.scrollSpeed*velMulty
+    local factor =  confs.gameplay.scrollSpeed/80
     local tail = f.arrowIndex.tails[f.trailIndex]
     local ts = f.position.y - tail*scroll*factor*80
     local b = (1/factor)*100
@@ -349,7 +356,7 @@ function moveArrows(dt)
         for d,f in pairs(v) do
             --print(i,v.position.y)
             local timeDiff = time-f.arrowIndex.index
-            local scroll = confs.scrollSpeed/velMulty
+            local scroll = confs.gameplay.scrollSpeed/velMulty
             --f.position.y = f.position.y + (scroll * 100) * dt
             --f.position.y = time * 80/confs.scrollSpeed
             local top = height*4 - scroll*200
@@ -367,8 +374,8 @@ function moveArrows(dt)
                     
                     v[d] = nil
                 elseif f.typ == 2 and f.trailIndex then
-                    local scroll = confs.scrollSpeed*velMulty
-                    local factor =  confs.scrollSpeed/80
+                    local scroll = confs.gameplay.scrollSpeed*velMulty
+                    local factor =  confs.gameplay.scrollSpeed/80
                     local ts = f.position.y - f.arrowIndex.tails[f.trailIndex]*scroll*factor*80
                     local b = (1/factor)*100
                     local g = (100*(factor))
@@ -404,7 +411,7 @@ function spawnArrow()
             
             for i,v in pairs(arrow) do
                 --print('new')
-                local scroll = confs.scrollSpeed*velMulty
+                local scroll = confs.gameplay.scrollSpeed*velMulty
                 local tableD = shallow_copy(elements.arrow)
                 tableD.position.y = height*4 - scroll * 100
                 tableD.delay = v
@@ -422,7 +429,7 @@ function spawnArrow()
     end
 end
 function rankings(magnitud)
-    local scroll = confs.scrollSpeed*velMulty
+    local scroll = confs.gameplay.scrollSpeed*velMulty
     if magnitud < 100/(40/scroll)  then ranking = 'sick' addPoints('sick') return end
     if magnitud < 300/(40/scroll)  then ranking = 'good' addPoints('good') return end
     if magnitud < 600/(40/scroll) then ranking = 'bad' addPoints('bad') return end
@@ -463,7 +470,7 @@ local actionList = {
 }
 function keyTransform(key)
     local action
-    for i,v in pairs(confs.input) do
+    for i,v in pairs(confs.input['4k']) do
         if v == key then action = i end
     end
     if action ~= nil then action = actionList[action] end
@@ -507,12 +514,9 @@ function drawTail(arrow,index)
     if arrow.pressing then 
         love.graphics.setScissor(x,y,sx,sy)
     end
-    
-
-
-    local scroll = confs.scrollSpeed*velMulty
+    local scroll = confs.gameplay.scrollSpeed*velMulty
     local tail = arrow.arrowIndex.tails[index]
-    local factor =  confs.scrollSpeed/80
+    local factor =  confs.gameplay.scrollSpeed/80
     --print(factor)
     for i = 0,(tail*10)-2,0.1 do
         local d = arrow.position.y -400*factor - (i)*scroll*factor*8
@@ -610,13 +614,7 @@ end
 function mod:draw()
     love.graphics.setFont(fonts.montserrat.obj)
     love.graphics.print(ranking,width/2 - 50,height/2 -50,nil,2)
-    local stringedPoints = 'points: '..tostring(stats.points)
-    local stringedAccuracy = 'accuracy: '..tostring(math.floor(stats.accuracy * 100 + 0.5) / 100).."%"
-    local pointsOffsetX = 20
-    local accuracyOffsetX = 20
 
-    love.graphics.print(stringedPoints,pointsOffsetX,height/2-200,nil,1.5)
-    love.graphics.print(stringedAccuracy,accuracyOffsetX,height/2-170,nil,1.5)
     love.graphics.print(fps.." "..tostring(level.bpm).." "..tostring(level.beat)..'/'..tostring(level.time_sign[2])..' '..tostring(time)..' '..tostring(confs.scrollSpeed))
     
     
@@ -627,6 +625,7 @@ function mod:draw()
     drawTrail()
     drawArrows()
     debug_draw()
+    w_items:draw()
     ---for i,v in pairs(longNotes) do drawTail(v) end
     
     love.graphics.pop()
@@ -639,10 +638,10 @@ local isDownT =  {
     right = false
 }
 function love.keyreleased(key)
-    if key == confs.input.left then isDownT.left = false end
-    if key == confs.input.right then isDownT.right = false end
-    if key == confs.input.up then isDownT.up = false end
-    if key == confs.input.down then isDownT.down = false end
+    if key == confs.gameplay.input['4k'].left then isDownT.left = false end
+    if key == confs.gameplay.input['4k'].right then isDownT.right = false end
+    if key == confs.gameplay.input['4k'].up then isDownT.up = false end
+    if key == confs.gameplay.input['4k'].down then isDownT.down = false end
 end
 function fixed_update(fixed_dt)
     
@@ -671,6 +670,7 @@ function mod:update(dt)
         fixed_update(1/60)
         accumulator = accumulator - 1/60
     end
+    w_items:update(dt)
     --inputPress(dt)
 end
 function pause_menu_selection(option)
@@ -713,8 +713,8 @@ function mod:keypressed( key )
         paused = true
     end
     if key == 't' then debug = not debug end
-    if key == '1' then confs.scrollSpeed = confs.scrollSpeed + 5 end
-    if key == '2' then confs.scrollSpeed = confs.scrollSpeed - 5 end
+    if key == '1' then confs.gameplay.scrollSpeed = confs.gameplay.scrollSpeed + 5 end
+    if key == '2' then confs.gameplay.scrollSpeed = confs.gameplay.scrollSpeed - 5 end
     if key == '3' then 
         time = time - 0.1 
         if time > 0 and time <= song:getDuration() then 

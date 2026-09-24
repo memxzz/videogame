@@ -1,5 +1,7 @@
 local mod = {}
 local loadStateMod = require('modules.loadState')
+local lume = require('libraries.lume')
+local notif_man = require('modules.notification_manager')
 local exitTime = 0
 local time = 0
 local mouse = {x = 0,y = 0}
@@ -48,6 +50,7 @@ local copied_group = {
 local fonts = {
     montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
 }
+local target_offset = 0
 function reloadFontSizes()
     local yfactor = height/600
     for i,v in pairs(fonts) do
@@ -416,6 +419,7 @@ function setLevelAudio(files,filtername,errorstring)
     load_level(level_name,'data/levels/')
 end
 function add_gui()
+    local new_notif = notif_man:add()
     w_items:clear()
     love.graphics.setFont(fonts.montserrat.obj)
     local bpm_box = w_items:add_item('textBox')
@@ -475,7 +479,7 @@ function mod:draw()
     love.graphics.setLineWidth(1)
     love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', VelMulty: '..tostring(velMulty)..', size: '..tostring(chart_sets.size)..', bpm: '..tostring(level.bpm)..', trail: '..tostring(trail))
     love.graphics.setColor(1,1,1,1)
-
+    
     
     if exitTime > 0 then
         love.graphics.push()
@@ -488,6 +492,7 @@ function mod:draw()
     draw_level()
     draw_selecting_box()
     w_items:draw()
+    notif_man:draw()
     love.graphics.pop()
     love.graphics.rotate(0)
 end
@@ -544,7 +549,11 @@ function fixed_update(fixed_dt)
     local size_factor = chart_sets.size/300
     if playing then
         chart_sets.offset = chart_sets.offset + fixed_dt*height*size_factor*velMulty
-   --- else 
+    else 
+        if target_offset < chart_sets.offset then
+            local velocity = 5
+            chart_sets.offset = lume.lerp(chart_sets.offset,target_offset,fixed_delta*velocity)
+        end
         --chart_sets.offset = old_timestep
     end
     --print(chart_sets.time_offset)
@@ -573,6 +582,7 @@ function mod:update(dt)
     set_trail(x)
     get_arrow()
     w_items:update(dt)
+    notif_man:update(dt)
     if love.keyboard.isDown('backspace') then
         exitTime = exitTime + dt
         if exitTime > 4 then
@@ -592,6 +602,7 @@ function mod:update(dt)
 end
 function play()
     playing = not playing
+    
     local size_factor = chart_sets.size / 300
     if playing == true then
         old_timestep = chart_sets.offset
@@ -608,7 +619,7 @@ function play()
     else
         song:stop()
         --love.audio.stop(song)
-        chart_sets.offset = old_timestep
+        --chart_sets.offset = old_timestep
     end
 end
 function end_chart()
@@ -810,6 +821,7 @@ function love.wheelmoved( x, y )
         return
     end
     chart_sets.offset = chart_sets.offset + 25*(300/chart_sets.size)*y
+    target_offset = chart_sets.offset
     if chart_sets.offset < 0  then chart_sets.offset = 0 end
 
     

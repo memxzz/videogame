@@ -8,6 +8,7 @@ local timerModule = require('libraries.time')
 local bitser = require('libraries.bitser')
 local template_handler = require('modules.template_handler')
 local w_items = require('libraries.workable_items')
+local lume = require('libraries.lume')
 --modules
 local conf_manager = require('modules.configuration_manager')
 --submenus
@@ -23,16 +24,17 @@ local start_task
 local song
 local elements = {
     arrow = {
-        activeIndex,
-        trailIndex,
+        activeIndex = nil,
+        trailIndex = nil,
         position = {x=0,y=0},
         time = 0,
         typ = 1,
-        arrowIndex,
+        arrowIndex = nil,
         pressing = false,
         dead = false,
     }
 }
+local level_info = {}
 local debug = false
 local input = {
     pointingTo = { --to what arrow each Trail is pointing.
@@ -69,6 +71,7 @@ local fixed_time = 0
 local velMulty = 1 --now it  works : )
 local paused = false
 local songName = ''
+local difficulty = 'normal'
 local started = false
 local rankinValues = {
     sick = 150,
@@ -91,7 +94,7 @@ local stats_template = {
 local fonts = {
     montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
 }
-function reloadFontSizes()
+local function reloadFontSizes()
     local yfactor = height/600
     for i,v in pairs(fonts) do
         if v.resize then
@@ -102,10 +105,10 @@ function reloadFontSizes()
         
     end
 end
-function loadSfxs()
+local function loadSfxs()
     sfxs.miss = love.audio.newSource('assets/sfx/miss.mp3','static')
 end
-function addPoints(value)
+local function addPoints(value)
     stats.points = stats.points + rankinValues[value]
     stats.bestPossiblePoints = stats.bestPossiblePoints + rankinValues.sick
     stats.rankins[value] = stats.rankins[value] + 1
@@ -118,8 +121,8 @@ function addPoints(value)
     --print(stats.points,stats.accuracy)
 end
 local timed = 0
-function lerp(a,b,t) return (1-t)*a + t*b end
-function beat_update(dt)
+local function lerp(a,b,t) return (1-t)*a + t*b end
+local function beat_update(dt)
     if paused then return end
 
     local value = 60 / level.bpm
@@ -141,7 +144,7 @@ function beat_update(dt)
         end
     end
 end
-function draw_grid()
+local function draw_grid()
     local scroll = confs.gameplay.scrollSpeed/velMulty
     local top = height*4 - scroll*200
     
@@ -151,7 +154,7 @@ function draw_grid()
 
     for i = 0, count do
         local y = height*4
-        y = top+(time)*scroll*100 + i*spacing/velMulty
+        y = top+(time)*scroll*100 + i*spacing
         y = y+600
 
 
@@ -168,20 +171,20 @@ function draw_grid()
     end
     
 end
-function table_clear(table)
+local function table_clear(table)
     for i,v in pairs(table) do table[i] = nil end
 end
-function reset_stats()
+local function reset_stats()
     ranking = ''
     stats = shallow_copy(stats_template)
 end
-function clear_arrows()
+local function clear_arrows()
     for i,v in pairs(activeArrows.trails) do
         table_clear(v)
     end
 end
 
-function playsong()
+local function playsong()
     started = false
     song:setVolume(1)
     song:seek(time,'seconds')
@@ -193,7 +196,7 @@ function playsong()
     end,{timeDue = 2/velMulty})
 end
 
-function shallow_copy(t)
+local function shallow_copy(t)
   if type(t) ~= "table" then
         return t
     end
@@ -207,13 +210,18 @@ function shallow_copy(t)
     return copy
 end
 
-function distance ( pos1, pos2 )
+local function distance ( pos1, pos2 )
   local dx = pos1.x - pos2.x
   local dy = pos1.y - pos2.y
   return math.sqrt ( dx * dx + dy * dy )
 end
-
-function setPointings()
+local function rankings(magnitud)
+    local scroll = confs.gameplay.scrollSpeed*velMulty
+    if magnitud < 100/(40/scroll)  then ranking = 'sick' addPoints('sick') return end
+    if magnitud < 300/(40/scroll)  then ranking = 'good' addPoints('good') return end
+    if magnitud < 600/(40/scroll) then ranking = 'bad' addPoints('bad') return end
+end
+local function setPointings()
     for i,v in pairs(activeArrows.trails) do 
         local bestOfZack = 99999999
         local bestOfZack2 = 99999999
@@ -232,7 +240,7 @@ function setPointings()
                     x = 0,
                     y = f.position.y
                 }
-                magnitud = distance(pos1,pos2)
+                local magnitud = distance(pos1,pos2)
                 if magnitud <= bestOfZack then 
                     bestOfZack = magnitud 
                     target = f 
@@ -250,7 +258,7 @@ function setPointings()
         --print(i,target)
     end
 end
-function loadLevel(name,path)
+local function loadLevel(name,path,difficulty)
     if not love.filesystem.getInfo(path..'/'..name..'/song.mp3') then 
         print("[gameplay]: "..path..'/'..name.."/song.mp3 doesn't exist.") 
         loadStateMod:loadState('levelSelector')
@@ -265,26 +273,29 @@ function loadLevel(name,path)
     playsong()
     if charting == true then return end
     
-    local levelDataEnc = love.filesystem.read(path..'/'..name..'/chart.rvc')
+    local levelDataEnc = love.filesystem.read(path..'/'..name..'/'..difficulty..'.rvc')
     local unencrypthLevel = bitser.loads(levelDataEnc)
     level = unencrypthLevel
+
+    local levelInfoTxt = love.filesystem.read(path..'/'..name..'/info.txt')
+    level_info = lume.deserialize(levelInfoTxt)
 end
-function add_gui()
+local function add_gui()
     w_items:clear()
     local data_list = w_items:add_item('list')
+    if not data_list then return end
     data_list.position.y = height/2-100
     data_list.background_color = {0,0,0,0}
     data_list.params.items = {
         {name = 'Name: ',value = songName, update = function(dt,item) item.value = songName end},
-        {name = 'Points: ',value = stringedPoints, update = function(dt,item) item.value = tostring(stats.points) end},
-        {name = 'Accuracy: ',value = stringedAccuracy, update = function(dt,item) item.value = tostring(math.floor(stats.accuracy * 100 + 0.5) / 100).."%" end},
+        {name = 'Points: ',value = '', update = function(dt,item) item.value = tostring(stats.points) end},
+        {name = 'Accuracy: ',value = '', update = function(dt,item) item.value = tostring(math.floor(stats.accuracy * 100 + 0.5) / 100).."%" end},
         {name = 'Misses: ',value = stats.rankins.miss, update = function(dt,item) item.value = stats.rankins.miss end},
     }
 end
 function mod:load(params)
     confs = conf_manager:get_data()
     pause_menu:load()
-    
     sprites["trail"] = love.graphics.newImage('assets/trail.png')
     sprites["arrow"] = love.graphics.newImage('assets/arrow.png')
     sprites["arrowtail_end"] = love.graphics.newImage('assets/arrow_long_end.png')
@@ -296,14 +307,14 @@ function mod:load(params)
     end
     reloadFontSizes()
     loadSfxs()
-    loadLevel(params.song,params.path) 
+    loadLevel(params.song,params.path,params.difficulty) 
     add_gui()
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
     pause_menu:resize(w,h)
 end
-function debug_tail_top(distance,pointx,pointy,index)
+local function debug_tail_top(distance,pointx,pointy,index)
     if not debug then return end
     local num = distance
     local result = num
@@ -317,7 +328,8 @@ function debug_tail_top(distance,pointx,pointy,index)
     love.graphics.pop()
     love.graphics.setColor(1, 1, 1, 1)
 end
-function check_tail(f)
+
+local function check_tail(f)
     if not f.arrowIndex.tails then return end
     if f.typ ~= 2 then return end
     local scroll = confs.gameplay.scrollSpeed*velMulty
@@ -349,7 +361,7 @@ function check_tail(f)
     
 end
 local inmunity = 1
-function moveArrows(dt)
+local function moveArrows(dt)
     inmunity = inmunity - dt
     if inmunity <= 0 or not charting then inmunity =  0 end
     for i,v in pairs(activeArrows.trails) do
@@ -400,7 +412,7 @@ function moveArrows(dt)
         
     end
 end
-function spawnArrow()
+local function spawnArrow()
     if paused then return end
     for _,arrow in pairs(level.arrows) do
         local val = (time-arrow.index)-1
@@ -428,13 +440,8 @@ function spawnArrow()
         end
     end
 end
-function rankings(magnitud)
-    local scroll = confs.gameplay.scrollSpeed*velMulty
-    if magnitud < 100/(40/scroll)  then ranking = 'sick' addPoints('sick') return end
-    if magnitud < 300/(40/scroll)  then ranking = 'good' addPoints('good') return end
-    if magnitud < 600/(40/scroll) then ranking = 'bad' addPoints('bad') return end
-end
-function press(v)
+
+local function press(v)
     if v  == nil then return end
     local pos1 = {
         x = 0,
@@ -468,7 +475,7 @@ local actionList = {
     up = 2,
     right = 1,
 }
-function keyTransform(key)
+local function keyTransform(key)
     local action
     for i,v in pairs(confs.input['4k']) do
         if v == key then action = i end
@@ -476,8 +483,8 @@ function keyTransform(key)
     if action ~= nil then action = actionList[action] end
     return action
 end
-function inputPress(key)
-    result = keyTransform(key)
+local function inputPress(key)
+    local result = keyTransform(key)
     if result == nil then return end
     for i,v in pairs(input.pointingTo) do
         if result == i then press(v) end
@@ -486,8 +493,8 @@ function inputPress(key)
         if result == i then press(v) end
     end
 end
-function inputRelease(key)
-    result = keyTransform(key)
+local function inputRelease(key)
+    local result = keyTransform(key)
     if not result then return end
     --print(input.lastPoint[result])
     for i,v in pairs(input.lastPoint) do
@@ -495,7 +502,7 @@ function inputRelease(key)
     end
 end
 local lastpoint
-function debug_scissor(x, y, sx, sy)
+local function debug_scissor(x, y, sx, sy)
     if not debug then return end
 
     love.graphics.push("all")
@@ -507,7 +514,7 @@ function debug_scissor(x, y, sx, sy)
 
     love.graphics.pop()
 end
-function drawTail(arrow,index)
+local function drawTail(arrow,index)
     --print(arrow.position.x/3)
     local x,y,sx,sy = 0,-height/3, width, height
     --debug_scissor(x,y,sx,sy)
@@ -545,7 +552,7 @@ function drawTail(arrow,index)
     
     --love.graphics.discard(sprites["arrowtail_start"],arrow.position.x,arrow.position.y-400*factor,nil,1,1*factor)
 end
-function drawArrows()
+local function drawArrows()
 ---if level.arrows[time] == nil then return end
    -- print((level.arrows[time]))
    local spriteW = sprites["trail"]:getWidth()
@@ -589,7 +596,7 @@ function drawArrows()
    end
 
 end
-function drawTrail()
+local function drawTrail()
     local spriteW = sprites["trail"]:getWidth()
     
     for i,v in pairs(activeArrows.trails) do
@@ -599,7 +606,7 @@ function drawTrail()
         love.graphics.draw(sprites["trail"],x,height*4)
     end
 end
-function debug_draw()
+local function debug_draw()
     if not debug then return end
     local y = height*4
     love.graphics.setColor(1,0,0,1)
@@ -643,7 +650,7 @@ function love.keyreleased(key)
     if key == confs.gameplay.input['4k'].up then isDownT.up = false end
     if key == confs.gameplay.input['4k'].down then isDownT.down = false end
 end
-function fixed_update(fixed_dt)
+local function fixed_update(fixed_dt)
     
     beat_update(fixed_dt)
     spawnArrow()
@@ -673,7 +680,7 @@ function mod:update(dt)
     w_items:update(dt)
     --inputPress(dt)
 end
-function pause_menu_selection(option)
+local function pause_menu_selection(option)
     pause_menu:reset()
     if option == 'resume' then
         paused = false
@@ -689,7 +696,7 @@ function pause_menu_selection(option)
             time = charting.time
         end
         
-        loadLevel(songName,'data/levels')
+        loadLevel(songName,'data/levels',difficulty)
     end
     if option == 'exit' then
         if charting then
@@ -713,15 +720,13 @@ function mod:keypressed( key )
         paused = true
     end
     if key == 't' then debug = not debug end
-    if key == '1' then confs.gameplay.scrollSpeed = confs.gameplay.scrollSpeed + 5 end
-    if key == '2' then confs.gameplay.scrollSpeed = confs.gameplay.scrollSpeed - 5 end
-    if key == '3' then 
+    if key == '3'  and charting then 
         time = time - 0.1 
         if time > 0 and time <= song:getDuration() then 
             song:seek(time,'seconds')
         end
     end
-    if key == '4' then 
+    if key == '4' and charting then 
         time = time + 0.1 
         if time > 0 and time <= song:getDuration() then 
             song:seek(time,'seconds')

@@ -1,6 +1,5 @@
 local loadStateMod = require('modules.loadState')
 local config_manager = require('modules.configuration_manager')
-
 function love.load()
     love.keyboard.setTextInput(true)
     config_manager:load()

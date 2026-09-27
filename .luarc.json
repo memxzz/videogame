@@ -1,0 +1,11 @@
+{
+    "runtime": {
+        "version": "LuaJIT"
+    },
+
+    "workspace": {
+        "library": [
+            "../love2d-luacats"
+        ]
+    }
+}

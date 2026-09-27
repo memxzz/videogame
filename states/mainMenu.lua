@@ -14,7 +14,7 @@ local list = {
 local selection = 1
 local fonts = {}
 local selected = false
-function loadFonts()
+local function loadFonts()
     fonts.montserrat = love.graphics.newFont("assets/fonts/montserrat.ttf", 50)
 end 
 function mod:load()
@@ -23,11 +23,14 @@ function mod:load()
     love.graphics.setFont(fonts.montserrat)
     sprites["buttonSel"] = love.graphics.newImage('assets/mainMenu/buttonSelected.png')
     sprites["buttonUnsel"] = love.graphics.newImage('assets/mainMenu/buttonUnselected.png')
+    
+
 end
 function mod:update(dt)
     dt = dt
     time:update(dt)
 end
+
 function mod:draw()
     love.graphics.setColor(1,1,1,1)
     for i,option in pairs(list) do
@@ -46,8 +49,6 @@ function mod:draw()
         love.graphics.draw(sprites[sprite],x,y,nil,multy,multy)
         love.graphics.print(option.name,x+50,y,nil)
     end
-    --love.graphics.print('1 for level selector, 2 for chart editor')
-
 end
 function select(option)
     if selected then return end
@@ -67,8 +68,6 @@ function mod:keypressed(key)
     if key == 'return' then select(list[selection]) end
     if selection  < 1 then selection = 1 end
     if selection  > #list then selection = #list end
-    --if key == '1' then loadState:loadState('levelSelector') end
-    --if key == '2' then loadState:loadState('chart_editor') end
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )

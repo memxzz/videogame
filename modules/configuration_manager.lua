@@ -17,7 +17,7 @@ local data_template = {
         },
 
     }
-function update_data() --update configurations in case there are new configs from newer updates.
+local function update_data() --update configurations in case there are new configs from newer updates.
     local d = love.filesystem.read('data/config.txt')
     local saved_data = lume.deserialize(d)
     for section,data in pairs(data_template) do
@@ -31,7 +31,7 @@ function update_data() --update configurations in case there are new configs fro
     local new_data = lume.serialize(saved_data)
     love.filesystem.write('data/config.txt',new_data)
 end
-function prepare_data()
+local function prepare_data()
     if not love.filesystem.getInfo('data/config.txt') then
         local s = lume.serialize(data_template)
         love.filesystem.write('data/config.txt',s)

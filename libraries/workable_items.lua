@@ -1,5 +1,6 @@
 --this library was made to handle items like textBoxes, textLabels and others.
 --made by me atto :  )
+
 local name = 'workable_items'
 local mod = {
     items = {},
@@ -8,13 +9,49 @@ local mod = {
         adding_file = false
     }
 }
+---@alias itemType
+---|'textBox'
+---|'textLabel'
+---|'list'
+---|'fileBox'
 local itemType = {
     ['textBox'] = 1,
     ['textLabel'] = 2,
     ['list'] = 3,
     ['fileBox'] = 4
 }
+--textbox
+---@class TextBoxParams
+---@field text_label string
+---@field text string
+---@field on_text_change function
+---@field on_text_return function
+---@field on_click function
+---@field texting boolean 
+--filebox
+---@class FileBoxParams
+---@field dialog_settings {title:string}
+---@field text_label string
+---@field file string?
+---@field on_dialog_end fun(files:table,filtername:string,errorstring:string)
+---@field adding_file boolean  
+--textlabel
+---@class TextLabelParams
+---@field text string
+
+--listItem
+---@class listItem
+---@field name string
+---@field value string
+---@field update? fun(dt,self_item)
+
+--list
+---@class ListParams
+---@field item_distance number
+---@field items table
+
 local params_per_type = {
+    ---@type TextBoxParams
     ['textBox'] = {
         text_label = 'template',
         text = '',
@@ -23,18 +60,21 @@ local params_per_type = {
         on_click = function() end,
         texting = false,
     },
+    ---@type FileBoxParams
     ['fileBox'] = {
         dialog_settings = {
             title = 'Title'
         },
         text_label = 'template',
-        file,
+        file = nil,
         on_dialog_end = function(files,filtername,errorstring) end,
         adding_file = false,
     },
+    ---@type TextLabelParams
     ['textLabel'] = {
         text = 'template',
     },
+    ---@type ListParams
     ['list'] = {
         item_distance = 20,
         items = {
@@ -57,8 +97,38 @@ local item = {
     params = {}
     
 }
+---@alias ItemParams TextBoxParams|FileBoxParams|TextLabelParams|ListParams
+---@alias ItemByType
+---| TextBoxItem
+---| TextLabelItem
+---| ListItemObject
+---| FileBoxItem
 
-function shallow_copy(t)
+---@class Item
+---@field typ number
+---@field size { x: number, y: number }
+---@field position { x: number, y: number }
+---@field background_color number[]
+---@field update fun(dt: number)
+
+
+---@class TextBoxItem: Item
+---@field typ 1
+---@field params TextBoxParams
+
+---@class FileBoxItem: Item
+---@field typ 4
+---@field params FileBoxParams
+
+---@class TextLabelItem: Item
+---@field typ 2
+---@field params TextLabelParams
+
+---@class ListItemObject: Item
+---@field typ 3
+---@field params ListParams
+
+local function shallow_copy(t)
   if type(t) ~= "table" then
         return t
     end
@@ -72,7 +142,7 @@ function shallow_copy(t)
     return copy
 end
 
-function on_type_draw(item)
+local function on_type_draw(item)
     if item.typ == itemType.textBox then
         local x = item.position.x
         local y = item.position.y
@@ -137,7 +207,7 @@ function mod:update(dt)
     end
 end
 local lastText = ''
-function on_type_pressed(item)
+local function on_type_pressed(item)
     if mod.states.texting  then return end
     if mod.states.adding_file then return end
     if item.typ == itemType.textBox then
@@ -213,8 +283,14 @@ function mod:clear()
         mod.items[i] = nil
     end
 end
+---@overload fun(typ: "textBox"): TextBoxItem
+---@overload fun(typ: "fileBox"): FileBoxItem
+---@overload fun(typ: "textLabel"): TextLabelItem
+---@overload fun(typ: "list"): ListItemObject
+---@param typ "textBox"|"fileBox"|"textLabel"|"list"
+---@return ItemByType
 function mod:add_item(typ)
-    if not itemType[typ] then print('['..name.."]: Can't add item. Type is not acceptable.") return end
+    if not itemType[typ] then print('['..name.."]: Can't add item. Type is not acceptable.") return  end
     local newItem = shallow_copy(item)
     newItem.typ = itemType[typ]
     newItem.params = shallow_copy(params_per_type[typ])

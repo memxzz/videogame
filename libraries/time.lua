@@ -4,12 +4,12 @@ local mod = {
     tasks = {}
 }
 local taskTemplate = {
-    func,
+    func = nil,
     time = 0,
     timeDue = 0,
     paused = false,
 }
-function shallow_copy(t)
+local function shallow_copy(t)
   if type(t) ~= "table" then
         return t
     end
@@ -22,6 +22,11 @@ function shallow_copy(t)
 
     return copy
 end
+---@class conf
+---@field timeDue number
+
+---@param func function
+---@param confs conf
 function mod:addTask(func,confs)
     local newTask = shallow_copy(taskTemplate)
     newTask.func = func

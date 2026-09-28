@@ -53,6 +53,9 @@ local input = {
     },
 }
 local level = {}
+local states = {
+    endingSong = false
+}
 local activeArrows = {
     trails = {
         [1] = {},
@@ -94,6 +97,7 @@ local stats_template = {
 local fonts = {
     montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
 }
+local timejejetime = 1 --when ending song idk
 local function reloadFontSizes()
     local yfactor = height/600
     for i,v in pairs(fonts) do
@@ -104,6 +108,27 @@ local function reloadFontSizes()
         end
         
     end
+end
+local function end_song() --TODO: everything...
+    states.endingSong = true
+    timerModule:addTask(
+        function ()
+            loadStateMod:loadState('song_end',{
+                stats = stats,
+                songName = songName,
+                difficulty = difficulty,
+                songSound = song,
+            })
+        end,
+        {timeDue = 3}
+    )
+
+end
+local function action_Event(events_list)
+    for i,v in pairs(events_list) do
+        if v.name == 'end_song' then end_song() end
+    end
+
 end
 local function loadSfxs()
     sfxs.miss = love.audio.newSource('assets/sfx/miss.mp3','static')
@@ -420,7 +445,11 @@ local function spawnArrow()
         
         if time >= gTime then 
            -- print('spawn',arrow.index)
-            
+            if arrow.events then
+                timerModule:addTask(function ()
+                    action_Event(arrow.events)
+                end,{timeDue = 1})
+            end
             for i,v in pairs(arrow) do
                 --print('new')
                 local scroll = confs.gameplay.scrollSpeed*velMulty
@@ -637,6 +666,14 @@ function mod:draw()
     
     love.graphics.pop()
     pause_menu:draw()
+    love.graphics.setColor(0,0,0,1-timejejetime)
+    if states.endingSong then
+        love.graphics.push("all")
+        love.graphics.origin()
+        love.graphics.rectangle("fill",0,0,width,height)
+        love.graphics.pop()
+    end
+    love.graphics.setColor(1,1,1,1)
 end
 local isDownT =  {
     left = false,
@@ -655,13 +692,18 @@ local function fixed_update(fixed_dt)
     beat_update(fixed_dt)
     spawnArrow()
 end
+
 function mod:update(dt)
 
     
     --time = math.floor(time * 100 + 0.5) / 100
     fps = 1/dt
+    if states.endingSong then
+        timejejetime = lume.lerp(timejejetime,0,dt*1.5)
+        print(timejejetime)
+    end
     if not paused then
-        time = time + dt*velMulty
+        time = time + dt*velMulty*timejejetime
         
     end
     
@@ -703,7 +745,8 @@ local function pause_menu_selection(option)
             loadStateMod:loadState('chart_editor',{
                 song = songName,
                 path = 'data/levels',
-                charting = charting
+                charting = charting,
+                difficulty = difficulty
             })
             return
         end

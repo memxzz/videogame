@@ -3,7 +3,9 @@ local mod = {}
 local lume = require('libraries.lume')
 ------------------------------
 local data_template = {
-        display = {},
+        display = {
+            vsync = false
+        },
         input = {
             ['4k'] = {
                 left = 'z',
@@ -42,6 +44,11 @@ function mod:get_data()
     local d = love.filesystem.read('data/config.txt')
     local s = lume.deserialize(d)
     return s
+end
+function mod:set_data(new_version)
+    local serialize = lume.serialize(new_version)
+    love.filesystem.write('data/config.txt',serialize)
+    print('[configuration_manager]: Updated conf file.')
 end
 function mod:load()
     print('[configuration_manager]: Load state.')

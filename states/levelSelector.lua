@@ -2,6 +2,7 @@ local mod = {}
 local loadStateMod = require('modules.loadState')
 local bitser = require('libraries.bitser')
 local w_items = require('libraries.workable_items')
+local notif_man = require('modules.notification_manager')
 local lume =  require('libraries.lume')
 local sprites = {
     
@@ -11,6 +12,9 @@ local levels = {
 }
 local items = {
     buttons = {
+
+    },
+    buttons_difficulty = {
 
     }
 }
@@ -45,12 +49,46 @@ local function lerpPoints(a,b,t)
         y = lerp(a.y,b.y,t)
     }
 end
+local function draw_difficulties()
+    if not levels[indexselect+1].difficulties then return end
+    if not show_levels then return end
+    local difficulties = levels[indexselect+1].difficulties
+    for i,v in pairs(items.buttons_difficulty) do
+        local sizefactor = height/600
+        local x = v.position.x
+        local y = v.position.y
+        local actual = (#difficulties-difficulty_index_select)
+        if v.index == actual then
+            love.graphics.setColor(0.8,0.8,0.8,1)
+        else
+            love.graphics.setColor(0.5,0.5,0.5,1)
+        end
+        love.graphics.rectangle("fill",x,y*sizefactor,300*sizefactor,60*sizefactor)
+        love.graphics.setColor(1,1,1,1)
+        love.graphics.print(v.name,x,y*sizefactor)
+    end
+end
+local function update_difficulties_buttons(dt)
+    if not levels[indexselect+1].difficulties then return end
+    if not show_levels then return end
+    local difficulties = levels[indexselect+1].difficulties
+    for i,v in pairs(difficulties) do
+        local sizefactor = height/600
+        local x = width-330*sizefactor
+        local y = 80*#difficulties/(sizefactor)
+        y = y-80*(i-3+difficulty_index_select)
+        y = y + 60
+        local actual = (#difficulties-difficulty_index_select)
+        items.buttons_difficulty[v].position.x = lume.lerp(items.buttons_difficulty[v].position.x,x,dt*10)
+        items.buttons_difficulty[v].position.y = lume.lerp(items.buttons_difficulty[v].position.y,y,dt*10)
+    end
+end
 local function button_draw()
     for i,v in pairs(items.buttons) do 
         local state = 'unselected'
         local fixedindex = (i-indexselect)
         local yfactor = height/600
-        if v.selected then state = 'selected' end
+        if v.selected and not show_levels then state = 'selected' end
         love.graphics.push()
         love.graphics.scale(0.3, 0.3)
         local touse = 1/fixedindex
@@ -72,15 +110,25 @@ local function button_update(dt)
     dtt = dt
     for i,v in pairs(items.buttons) do 
         local fixedindex = (i-indexselect)
+        if show_levels then
+            local difficulties = levels[indexselect+1].difficulties
+            fixedindex = fixedindex-(difficulty_index_select)
+        end
         v.selected = false
         local sizefactor = height/600
         if i == indexselect+1 then v.selected = true end
         local y = 100 + fixedindex*(100*sizefactor)--height/2+fixedindex*300
-        v.position.y = lerp(v.position.y,y,10*dt)
+        local difficulties = levels[indexselect+1].difficulties
         local xoffset = fixedindex*30 *sizefactor
         if i < indexselect+2 then 
-            xoffset = xoffset*-1 
+            xoffset = xoffset*-1
+        else
+            if show_levels then
+                y = y + #difficulties*80*sizefactor
+            end
         end
+        y = y
+        v.position.y = lerp(v.position.y,y,10*dt)
         local x = width + xoffset
         --print(width)
         v.position.x = lerp(v.position.x,x,10*dt)
@@ -134,7 +182,6 @@ local function loadLogos(lvl)
     if not levelDataEnc then print('No info.txt for '..lvl.name) end
     local lvlData = lume.deserialize(levelDataEnc)
     if not lvlData then print('Couldnt load decode lvl data for '..lvl.name) lvlData = {} end
-    print('data',lvlData)
     datas[lvl.name] = lvlData
     datas[lvl.name].path = path
     local imagePath = path .. "/" .. lvl.name .. "/logo.png"
@@ -235,8 +282,8 @@ function mod:load()
 
     sprites["button_selected"] = love.graphics.newImage("assets/levelSelector/button/selected.png")
     sprites["button_unselected"] = love.graphics.newImage("assets/levelSelector/button/unselected.png")
+    sprites["error_sfx"] = love.audio.newSource('assets/sfx/error.mp3','static')
     sprites.songsLogos = {}
-    
     for _, v in ipairs(levels) do
         button_add(v)
     end
@@ -267,16 +314,18 @@ local function logoDraw()
 end
 function mod:draw()
     button_draw()
+    draw_difficulties()
     logoDraw()
     w_items:draw()
+    notif_man:draw()
     if time > 0 then
         love.graphics.print('Exiting...'..'('..tostring(math.floor(time))..')')
     end
 end
 function mod:keypressed(key)
     if show_levels then
-        if key == 'up' then difficulty_index_select = difficulty_index_select + 1 end
-        if key == 'down' then difficulty_index_select =  difficulty_index_select - 1 end
+        if key == 'up' then difficulty_index_select = difficulty_index_select - 1 end
+        if key == 'down' then difficulty_index_select =  difficulty_index_select + 1 end
     else
         if key == 'up' then indexselect = indexselect - 1 end
         if key == 'down' then indexselect = indexselect + 1 end
@@ -286,7 +335,7 @@ function mod:keypressed(key)
     if indexselect >= #levels then indexselect = #levels -1 end
 
     if difficulty_index_select < 0 then difficulty_index_select = 0 end
-    if difficulty_index_select > #levels[indexselect+1].difficulties then difficulty_index_select = #levels[indexselect+1].difficulties end
+    if difficulty_index_select > #levels[indexselect+1].difficulties-1 then difficulty_index_select = #levels[indexselect+1].difficulties-1 end
     
     local lvl = levels[indexselect+1]
     local path = '/data/levels'
@@ -294,39 +343,64 @@ function mod:keypressed(key)
         path = 'data/levels/official' --this path
     end
     if key == '7' then
-        stop_all_songs()
-        
         if love.filesystem.getInfo(path..'/'..lvl.name..'/'..difficulty..'.rvc') then 
+            stop_all_songs()
             loadStateMod:loadState('chart_editor',{song = lvl.name,path = path,difficulty = difficulty})
+        else
+            local notif = notif_man:add()
+            notif.text.title = 'Not found.'
+            notif.text.subtitle = "couldn't find difficulty "..difficulty
+            volume = 0
+            love.audio.stop(sprites["error_sfx"])
+            love.audio.play(sprites["error_sfx"])
         end
     end
     if key == 'escape' then
         show_levels = false
+        
     end
     if key == "return" then
-        
         if show_levels then
-            print('aaaa')
-            stop_all_songs()
+            
             if love.filesystem.getInfo(path..'/'..lvl.name..'/'..difficulty..'.rvc') then 
+                stop_all_songs()
                 loadStateMod:loadState('gameplay',{song = lvl.name,path = path,difficulty = difficulty})
+            else
+                local notif = notif_man:add()
+                notif.text.title = 'Not found.'
+                notif.text.subtitle = "couldn't find difficulty "..difficulty
+                volume = 0
+                love.audio.stop(sprites["error_sfx"])
+                love.audio.play(sprites["error_sfx"])
             end       
         else
             show_levels = true
+            local difficulties = levels[indexselect+1].difficulties
+            for i,v in pairs(items.buttons_difficulty) do items.buttons_difficulty[i] = nil end
+            for i,v in pairs(difficulties) do 
+                items.buttons_difficulty[v] = {
+                    position = {x = width-100, y = height/2},
+                    index = i,
+                    name = v
+                }
+            end
+            --difficulty_index_select = #levels[indexselect+1].difficulties-1
         end
 
     end
-    print(difficulty)
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
     reloadFontSizes()
+    notif_man:resize(w,h)
 end
 function mod:update(dt)
     button_update(dt)
+    update_difficulties_buttons(dt)
     play_audio(dt)
     w_items:update(dt)
-    difficulty = levels[indexselect+1].difficulties[difficulty_index_select+1]
+    local difficulties = levels[indexselect+1].difficulties
+    difficulty = levels[indexselect+1].difficulties[(#difficulties-difficulty_index_select)]
     if love.keyboard.isDown('backspace') then
         time = time + dt
         if time > 1 then
@@ -336,6 +410,7 @@ function mod:update(dt)
         end
         return
     end
+    notif_man:update(dt)
     if not show_levels then difficulty_index_select = 0 end
     time = 0
 end

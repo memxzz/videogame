@@ -14,12 +14,15 @@ local mod = {
 ---|'textLabel'
 ---|'list'
 ---|'fileBox'
+---|'textButton'
 local itemType = {
     ['textBox'] = 1,
     ['textLabel'] = 2,
     ['list'] = 3,
-    ['fileBox'] = 4
+    ['fileBox'] = 4,
+    ['textButton'] = 5
 }
+
 --textbox
 ---@class TextBoxParams
 ---@field text_label string
@@ -28,6 +31,12 @@ local itemType = {
 ---@field on_text_return function
 ---@field on_click function
 ---@field texting boolean 
+---@field font? love.Font
+--textbutton
+---@class TextButtonItem
+---@field text string
+---@field on_click function
+---@field font? love.Font
 --filebox
 ---@class FileBoxParams
 ---@field dialog_settings {title:string}
@@ -35,20 +44,23 @@ local itemType = {
 ---@field file string?
 ---@field on_dialog_end fun(files:table,filtername:string,errorstring:string)
 ---@field adding_file boolean  
+---@field font? love.Font
 --textlabel
 ---@class TextLabelParams
 ---@field text string
-
+---@field font? love.Font
 --listItem
 ---@class listItem
 ---@field name string
 ---@field value string
+---@field font? love.Font
 ---@field update? fun(dt,self_item)
 
 --list
 ---@class ListParams
 ---@field item_distance number
 ---@field items table
+---@field font? love.Font
 
 local params_per_type = {
     ---@type TextBoxParams
@@ -59,6 +71,13 @@ local params_per_type = {
         on_text_return = function() end,
         on_click = function() end,
         texting = false,
+        font = nil,
+    },
+    ---@type TextButtonItem
+    ['textButton'] = {
+        text = '',
+        on_click = function() end,
+        font = nil,
     },
     ---@type FileBoxParams
     ['fileBox'] = {
@@ -69,14 +88,17 @@ local params_per_type = {
         file = nil,
         on_dialog_end = function(files,filtername,errorstring) end,
         adding_file = false,
+        font = nil,
     },
     ---@type TextLabelParams
     ['textLabel'] = {
         text = 'template',
+        font = nil,
     },
     ---@type ListParams
     ['list'] = {
         item_distance = 20,
+        font = nil,
         items = {
             {name = 'name',value = 'value'} --both strings
         }
@@ -93,9 +115,12 @@ local item = {
             y = 0
         },
     background_color = {0.8,0.8,0.8,1}, --rgba, same as love2d setColor()
+    to_delete = false,
+    delete = function (item)
+        item.to_delete = true
+    end,
     update = function() end,
     params = {}
-    
 }
 ---@alias ItemParams TextBoxParams|FileBoxParams|TextLabelParams|ListParams
 ---@alias ItemByType
@@ -110,6 +135,7 @@ local item = {
 ---@field position { x: number, y: number }
 ---@field background_color number[]
 ---@field update fun(dt: number)
+---@field delete fun(self_item:Item)
 
 
 ---@class TextBoxItem: Item
@@ -148,18 +174,34 @@ local function on_type_draw(item)
         local y = item.position.y
         local height = item.size.x
         local tExtra = ''
+        if item.params.font then
+            love.graphics.setFont(item.params.font)
+        end
         if item.params.texting then tExtra = '|' end
         if item.params.text == '' then
             love.graphics.print(item.params.text_label,x,y)
         else love.graphics.print(item.params.text..tExtra,x,y)
         end
     end
+    if item.typ == itemType['textButton'] then
+        local x = item.position.x
+        local y = item.position.y
+        local height = item.size.x
+        local tExtra = ''
+        if item.params.font then
+            love.graphics.setFont(item.params.font)
+        end
+        love.graphics.print(item.params.text,x,y)
+    end
     if item.typ == itemType.fileBox then
         local x = item.position.x
         local y = item.position.y
         local height = item.size.x
+        if item.params.font then
+            love.graphics.setFont(item.params.font)
+        end
         --if not item.params.file then
-            love.graphics.print(item.params.text_label,x,y)
+        love.graphics.print(item.params.text_label,x,y)
         --else 
         --    love.graphics.print(item.params.file,x,y)
         --end
@@ -168,9 +210,15 @@ local function on_type_draw(item)
         local x = item.position.x
         local y = item.position.y
         local height = item.size.x
+        if item.params.font then
+            love.graphics.setFont(item.params.font)
+        end
         love.graphics.print(item.params.text,x,y)
     end
     if item.typ == itemType.list then
+        if item.params.font then
+            love.graphics.setFont(item.params.font)
+        end
         for i,element in pairs(item.params.items) do
             local x = item.position.x
             local y = item.position.y + (i-1) * item.params.item_distance
@@ -204,6 +252,9 @@ function mod:update(dt)
                 end
             end
         end
+        if item.to_delete then 
+            mod.items[i] = nil
+        end
     end
 end
 local lastText = ''
@@ -215,6 +266,9 @@ local function on_type_pressed(item)
         item.params.text = ' '
         item.params.texting = true
         mod.states.texting = true
+    end
+    if item.typ == itemType.textButton then
+        item.params.on_click()
     end
     if item.typ == itemType.fileBox then
         item.params.adding_file = true
@@ -287,7 +341,8 @@ end
 ---@overload fun(typ: "fileBox"): FileBoxItem
 ---@overload fun(typ: "textLabel"): TextLabelItem
 ---@overload fun(typ: "list"): ListItemObject
----@param typ "textBox"|"fileBox"|"textLabel"|"list"
+---@overload fun(typ: "textButton"): TextButtonItem
+---@param typ "textBox"|"fileBox"|"textLabel"|"list"|"textButton"
 ---@return ItemByType
 function mod:add_item(typ)
     if not itemType[typ] then print('['..name.."]: Can't add item. Type is not acceptable.") return  end
@@ -296,6 +351,6 @@ function mod:add_item(typ)
     newItem.params = shallow_copy(params_per_type[typ])
 
     mod.items[#mod.items + 1] = newItem
-    return mod.items[#mod.items]
+    return newItem
 end
 return mod

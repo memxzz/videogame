@@ -23,12 +23,27 @@ local last_arrow = {}
 local level_info =  {}
 local placeable = false
 local difficulty = 'normal'
+local typing = false
 local chart_sets = {
     offset = 0,
     size = 300,
-    multy = 0.5,
+    multy = 1,
     total_snap = false
    -- time_offset = 0,
+}
+local type_events = {
+    ['end_song'] = {
+        --this one doesnt have any properties.
+    },
+    ['change_scrollspeed'] = {
+        multiplier = 1,
+    }
+}
+local assets = {
+    events = {
+        ['template'] = love.graphics.newImage('assets/chart_editor/events_ico/template.png'),
+        ['end_song'] = love.graphics.newImage('assets/chart_editor/events_ico/end_song.png')
+    }
 }
 local level_name = ''
 local width, height, flags = love.window.getMode( )
@@ -53,7 +68,9 @@ local copied_group = {
 local fonts = {
     montserrat = {obj = love.graphics.newFont("assets/fonts/montserrat.ttf", 30),size = 12,resize = false}
 }
+local actual_event = 0
 local target_offset = 0
+local actual_event_to_add = 'end_song'
 local function reloadFontSizes()
     local yfactor = height/600
     for i,v in pairs(fonts) do
@@ -273,7 +290,7 @@ local function draw_tail(v,x,i,arrow,index,ry)
     local y = index*height*size_factor
     local ts = bottom-arrow.tails[i]*height*size_factor+chart_sets.offset-y
     if ts > height then return end --so we dont  draw anything we dont need
-    if ry < -70 then return end
+    if ry < -70 then return end -------------------------------------------
     love.graphics.setColor(1,1,1,1)
     --local y = arrow.tails[i]+chart_sets.offset
     for r = 0,(arrow.tails[i]*10)-1 do
@@ -294,6 +311,28 @@ local function debug_arrow_draw(x,y,i)
     love.graphics.setColor(1,0,0,1)
     love.graphics.print('t: '..tostring(i),x,y)
     love.graphics.setColor(1,1,1,1)
+end
+local function get_selected_event(events)
+    if placeable then return end
+    local size = 335
+    local place = width/2-size/2-80
+    local pos = place-mouse.x+80
+    local shit = math.floor(pos/80)+1
+    actual_event = shit
+end
+local function draw_events(events,index)
+    local bottom = height-200
+    local size_factor = chart_sets.size / 300
+    local size = 335
+    for i,v in pairs(events) do
+        local y = bottom-index*height*size_factor+chart_sets.offset
+        local x = width/2-size/2-80*i
+        love.graphics.setColor(1,1,1,1)
+        love.graphics.draw(assets.events['template'],x,y-12,0,0.15,0.15)
+        if assets.events[v.name] then
+            love.graphics.draw(assets.events[v.name],x,y-12,0,0.15,0.15)
+        end
+    end
 end
 local function draw_arrow(arrow,index)
     local size = 335
@@ -381,7 +420,10 @@ local function draw_level()
     end
     for i,v in pairs(table) do
         draw_arrow(v,v.index)
-      
+        if v.events then
+            draw_events(v.events,v.index)
+            get_selected_event(v.events)
+        end
     end
 end
 local function copyFile(source, destination)
@@ -474,6 +516,15 @@ local function add_gui()
     charterBox.params.text_label = 'charter'
     charterBox.params.on_text_return = function(text)
         level_info.charter = text
+    end
+    local event_to_add = w_items:add_item("textBox")
+    event_to_add.position = {
+        x = width-220,
+        y = 380
+    }
+    event_to_add.params.text_label = 'event to add'
+    event_to_add.params.on_text_return = function(text)
+        actual_event_to_add = text
     end
     local level_details = w_items:add_item('list')
     level_details.position.y = 50
@@ -631,6 +682,7 @@ function mod:update(dt)
         fixed_update(1/60)
         accumulator = accumulator - 1/60
     end
+    
 end
 function play()
     playing = not playing
@@ -657,6 +709,9 @@ end
 local function end_chart()
     if w_items.texting then return end
     print('[Chart_editor]: Saved level as [' .. level_name .. '].')
+    local notif = notif_man:add()
+    notif.text.title = 'Saved level.'
+    notif.text.subtitle ='Saved '..level_name
     local newLevel = bitser.dumps(level)
     local path = 'data/levels/' .. level_name
 
@@ -699,6 +754,7 @@ function return_back_history()
 end
 function selecting_combos(key)
     local items = {}
+    if typing then return end
     if key == 'backspace' then
         for time,arrow in pairs(selected_notes) do
             local copy = shallow_copy(level.arrows[time])
@@ -748,6 +804,7 @@ end
 function mod:keypressed(key)
     w_items:keypressed(key)
     if w_items.states.texting then return end
+    if typing then return end
     selecting_combos(key)
     if key == 't' then
         debug = not debug
@@ -768,10 +825,16 @@ function mod:keypressed(key)
         if key == 'return' then
             local desiredTime = time -1
             if desiredTime <= 0 then desiredTime = 0 end
-            loadStateMod:loadState('gameplay',{song = level_name,path = 'data/levels',charting = {
-                time = desiredTime,
-                chart_sets = chart_sets
-            }})
+                loadStateMod:loadState('gameplay',{
+                    song = level_name,
+                    path = 'data/levels',
+                    charting = {
+                        time = desiredTime,
+                        chart_sets = chart_sets
+                    },
+                    difficulty = difficulty
+                }
+            )
         end
     end
 
@@ -779,10 +842,37 @@ function mod:keypressed(key)
         end_chart()
     end
 end
-function addNote(time,typ)
+local function get_event_properties(name)
+    print(name,actual_event_to_add)
+    if not type_events[name] then return end
+    local props = shallow_copy(type_events[name])
+    return props
+end
+local function addEvent(time,event)
+    if love.keyboard.isDown('lctrl') then return end
+    if placeable then return end
+    if trail ~= 4 then return end
+    local d = {0,0,0,0,index = time,events = {}}
+    if level.arrows[time] then d = level.arrows[time] end
+    if not d.events then d.events = {} end
+    local timeEvents = d.events
+    local props = get_event_properties(event)
+    if not props then
+        local warning = notif_man:add()
+        warning.text.title = "WARNING"
+        warning.text.subtitle = "The event doesn't exist."
+        return
+    end
+    table.insert(timeEvents,{
+        name = event,
+        properties = props
+    })
+    level.arrows[time] = d
+end
+local function addNote(time,typ)
     if love.keyboard.isDown('lctrl') then return end
     if not placeable then return end
-    local d = {0,0,0,0,index = time}
+    local d = {0,0,0,0,index = time,events = {}}
     if level.arrows[time] then d = level.arrows[time] end
     d[trail] = typ
     if typ ~= 3 then last_arrow = d end
@@ -805,9 +895,30 @@ function deleteperproximity()
 
     return bestTime
 end
-
-function deleteNote(timed)
-    if not level.arrows[timed] then print('[f: deleteNote]: No arrow section for {t: '..tostring(timed)..'}.') return end
+local function deleteEvent(timed)
+    if placeable then return end
+    local d = {0,0,0,0,index = timed,events = {}}
+    if not d.events then return end
+    if level.arrows[timed] then d = level.arrows[timed] end
+    if not d.events[actual_event] then return end
+    d.events[actual_event] = nil
+    local id = 0
+    local newTable = {}
+    for i,v in pairs(d.events) do
+        id = id + 1
+        newTable[id] = v
+    end
+    d.events = newTable
+end
+local function deleteNote(timed)
+    if not level.arrows[timed] then 
+        print('[f: deleteNote]: No arrow section for {t: '..tostring(timed)..'}.') 
+        local notif = notif_man:add()
+        notif.text.title = "Can't delete"
+        notif.text.subtitle = 'Nothing to delete.'
+        return 
+    end
+    if not placeable then return end
     local d = {0,0,0,0,index = timed}
     if level.arrows[timed] then 
         d = level.arrows[timed] 
@@ -829,6 +940,7 @@ function love.mousepressed( x, y, button, istouch, presses )
     if button  ==  1 then --left click
         --addNote(time)
         addNote(val,1)
+        addEvent(val,actual_event_to_add)
     end
     
     --if not arrow then return end
@@ -836,6 +948,7 @@ function love.mousepressed( x, y, button, istouch, presses )
         local val2 = timetogrid()
         if chart_sets.total_snap  then val2 = deleteperproximity() end
         deleteNote(val2)
+        deleteEvent(val2)
     end
 end
 
@@ -868,6 +981,7 @@ end
 function love.resize( w, h )
     w_items:clear()
     width, height, flags = love.window.getMode( )
+    notif_man:resize(w,h)
     reloadFontSizes()
     add_gui()
 end

@@ -1,13 +1,19 @@
+--and this is the notification manager
+--it's just a module that makes notifications :)
 local mod = {
     items = {}
 }
 local time = require('libraries.time')
 local lume = require('libraries.lume')
 local width, height, flags = love.window.getMode( )
+---@class Notification
+---@field position {x:number,y:number}
+---@field icon? nil
+---@field text {title:string,subtitle:string}
 local template = {
     index = 0,
     position = {x=0,y=0},
-    icon,
+    icon = nil,
     size = {
         x = 300,
         y = 80
@@ -58,9 +64,10 @@ function mod:draw()
     love.graphics.setColor(1,1,1,1)
     love.graphics.pop()
 end
-function love.resize( w, h )
+function mod:resize( w, h )
     width, height, flags = love.window.getMode( )
 end
+---@return Notification
 function mod:add()
     local item = shallow_copy(template)
     mod.items[#mod.items+1] = item

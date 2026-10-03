@@ -590,20 +590,17 @@ function get_arrow()
     local size_factor = chart_sets.size/300
     local start = 0
     arrow = nil
-    for i,v  in pairs(level.arrows) do
-        local vtime = time
-        --local trail = 0
-        for _,t in pairs(v) do
-            ---print(_,t,trail)
-            if t == 1 and trail == _ then
-                if vtime > i-0.1*size_factor and vtime < i+0.1*size_factor then
-                    arrow = v
-                    
+    for i = time-2,time+2 do 
+        local v = level.arrows[i]
+        if v then
+            for _,t in pairs(v) do
+                if t == 1 and trail == _ then
+                    if time > i-0.1*size_factor and time < i+0.1*size_factor then
+                        arrow = v
+                    end
                 end
             end
         end
-            --print(i,vtime)
-        
     end
 end
 function timetogrid(custom)

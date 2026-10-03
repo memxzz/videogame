@@ -3,6 +3,7 @@ local loadStateMod = require('modules.loadState')
 local bitser = require('libraries.bitser')
 local w_items = require('libraries.workable_items')
 local notif_man = require('modules.notification_manager')
+local rankings_manager = require('modules.rankings_manager')
 local lume =  require('libraries.lume')
 local sprites = {
     
@@ -10,6 +11,7 @@ local sprites = {
 local levels = {
 
 }
+local rankings = {}
 local items = {
     buttons = {
 
@@ -196,6 +198,20 @@ local function loadLogos(lvl)
     end
 
 end
+local function load_rankings(lvl)
+    local path = 'data/levels'
+    if lvl.official then 
+        path = "data/levels/official"
+    else
+        path = 'data/levels'
+    end
+    path = path..'/'..lvl.name
+    rankings = rankings_manager:get_data(path,difficulty)
+    if not rankings then print('No ranking data') return end
+    for i,v in pairs(rankings) do
+        print(i,v)
+    end
+end
 local function add_gui()
     local data_list = w_items:add_item('list')
     data_list.background_color = {1,1,1,0}
@@ -278,6 +294,7 @@ function mod:load()
     for _, v in ipairs(levels) do
         load_audio(v)
         loadLogos(v)
+        load_rankings(v)
     end
 
     sprites["button_selected"] = love.graphics.newImage("assets/levelSelector/button/selected.png")

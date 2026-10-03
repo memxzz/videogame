@@ -16,6 +16,7 @@ local fonts = {
 local exiting = false
 local black_screen_time = 1
 local rank_color = {1,1,1,1}
+local rank_man = require('modules.rankings_manager')
 local function get_ranking()
     rank_color = {1,1,0,1}
     if stats.accuracy >= 99.8 then
@@ -101,6 +102,7 @@ function mod:load(params)
     stats = params.stats
     songSound = params.songSound
     add_gui()
+    rank_man:add_ranking(params.difficulty,params,params.path..'/'..params.songName)
 end
 function mod:update(dt)
     local target = 0

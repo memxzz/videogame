@@ -19,7 +19,7 @@ local sprites = {
     
 }
 local sfxs = {}
-
+local song_path
 local start_task
 local song
 local elements = {
@@ -118,6 +118,7 @@ local function end_song() --TODO: everything...
                 songName = songName,
                 difficulty = difficulty,
                 songSound = song,
+                path = song_path
             })
         end,
         {timeDue = 3}
@@ -290,6 +291,7 @@ local function loadLevel(name,path,difficulty)
         return 
     end
     if not charting then time = 0 end
+    song_path = path
     level = template_handler:get('level')
     songName = name
     reset_stats()

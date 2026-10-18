@@ -3,11 +3,16 @@ local mod = {}
 local loadState = require('modules.loadState')
 local time = require('libraries.time')
 local lume = require('libraries.lume')
+local background = require('modules.background')
+local gradient = require('modules.gradient')
+local back_color = {0,0,0}
+local back_time_lerp = 1
 local menus = {
     config = require('states.menus_main_menu.config')
 }
 local width, height, flags = love.window.getMode( )
 local sprites = {}
+local t_time = 0
 local dt = 0.016
 local list = {
     {position = {x=0,y=0}, name = 'play',time = 1},
@@ -26,17 +31,29 @@ local states = {
 local function loadFonts()
     fonts.montserrat = love.graphics.newFont("assets/fonts/montserrat.ttf", 50)
 end 
-function mod:load()
+function mod:load(params)
     for i,v in pairs(list) do v.position.x = -500-i*200 end
     loadFonts()
     love.graphics.setFont(fonts.montserrat)
     sprites["buttonSel"] = love.graphics.newImage('assets/mainMenu/buttonSelected.png')
     sprites["buttonUnsel"] = love.graphics.newImage('assets/mainMenu/buttonUnselected.png')
     menus.config:load()
-
+    
+    print(params)
+    if params then
+        if not params.keepColor then
+            background:setColor(0.7,1.5,2)
+        end
+    else
+        background:load({0.3,0.5,0.8})
+        background:setColor(0.7,1.5,2)
+    end
+    
 end
 function mod:update(dt)
     dt = dt
+    t_time = t_time + dt
+    background:update(dt)
     time:update(dt)
     menus.config:update(dt)
     menus.config.open = states.configMenu
@@ -51,6 +68,8 @@ local function changeState(state)
     end
 end
 function mod:draw()
+    love.graphics.setColor(1,1,1,1)
+    background:draw()
     love.graphics.setColor(1,1,1,1)
     for i,option in pairs(list) do
         local sprite = "buttonUnsel"
@@ -103,6 +122,7 @@ function mod:mousepressed( x, y, button, istouch, presses )
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
+    background:resize()
     menus.config:resize()
 end
 return mod

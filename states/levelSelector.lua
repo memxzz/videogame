@@ -4,7 +4,9 @@ local bitser = require('libraries.bitser')
 local w_items = require('libraries.workable_items')
 local notif_man = require('modules.notification_manager')
 local rankings_manager = require('modules.rankings_manager')
+local time_mod = require('libraries.time')
 local lume =  require('libraries.lume')
+local background = require('modules.background')
 local sprites = {
     
 }
@@ -198,7 +200,29 @@ local function loadLogos(lvl)
     end
 
 end
+local old_gui = nil
+local old_difficulty = ''
+local function update_rankings_gui()
+    
+    if difficulty == old_difficulty then return end
+    if not rankings then return end
+    if not rankings[difficulty] then return end
+    if not #rankings[difficulty] then return end
+    if old_gui then old_gui:delete(old_gui) end
+    old_difficulty = difficulty
+    local table = w_items:add_item("list")
+    table.params.items = {}
+    for i,v in pairs(rankings[difficulty]) do
+        table.params.items[#table.params.items+1] = {
+            name = 'accuracy: '..tostring(v.accuracy),
+            value = 'points: '..tostring(v.points)
+        }
+    end
+    old_gui = table
+    print(old_gui)
+end
 local function load_rankings(lvl)
+    print('Appending data: '..lvl.name)
     local path = 'data/levels'
     if lvl.official then 
         path = "data/levels/official"
@@ -264,7 +288,17 @@ local function get_lvl_Info(path)
     local info = lume.deserialize(txt)
     return info
 end
+local function on_selection_change(level)
+    print(level.name)
+    if not level.color then
+        background:setColor(1,1,1)
+    else
+        background:setColor(level.color[1],level.color[2],level.color[3])
+    end
+end
 function mod:load()
+    --background:load()
+    stop_all_songs()
     local externalLevelsPath = "data/levels"
     if not love.filesystem.getInfo(externalLevelsPath) then
         love.filesystem.createDirectory(externalLevelsPath)
@@ -276,7 +310,8 @@ function mod:load()
         table.insert(levels, {
             official = true,
             name = v,
-            difficulties = info.difficulties
+            difficulties = info.difficulties,
+            color = info.color
         })
     end
 
@@ -286,7 +321,8 @@ function mod:load()
             table.insert(levels, {
                 official = false,
                 name = v,
-                difficulties = info.difficulties
+                difficulties = info.difficulties,
+                color = info.color
             })
         end
     end
@@ -294,7 +330,6 @@ function mod:load()
     for _, v in ipairs(levels) do
         load_audio(v)
         loadLogos(v)
-        load_rankings(v)
     end
 
     sprites["button_selected"] = love.graphics.newImage("assets/levelSelector/button/selected.png")
@@ -306,6 +341,12 @@ function mod:load()
     end
     reloadFontSizes()
     add_gui()
+    if levels[1] then
+        time_mod:addTask(function ()
+            on_selection_change(levels[1])
+        end,{timeDue = 1})
+        
+    end
 end
 local function get_transfurmed_image_proportions(image,sizex,sizey)
     local factor = height/600
@@ -330,6 +371,7 @@ local function logoDraw()
 
 end
 function mod:draw()
+    background:draw()
     button_draw()
     draw_difficulties()
     logoDraw()
@@ -339,6 +381,16 @@ function mod:draw()
         love.graphics.print('Exiting...'..'('..tostring(math.floor(time))..')')
     end
 end
+local old_level
+local function on_level_change(level,path)
+    if old_level == level.name then return end
+    if not show_levels then return end
+    old_level = level.name
+    
+    load_rankings(level)
+    
+end
+local ol_lvl
 function mod:keypressed(key)
     if show_levels then
         if key == 'up' then difficulty_index_select = difficulty_index_select - 1 end
@@ -347,7 +399,6 @@ function mod:keypressed(key)
         if key == 'up' then indexselect = indexselect - 1 end
         if key == 'down' then indexselect = indexselect + 1 end
     end
-
     if indexselect < 0 then indexselect = 0 end
     if indexselect >= #levels then indexselect = #levels -1 end
 
@@ -356,6 +407,10 @@ function mod:keypressed(key)
     
     local lvl = levels[indexselect+1]
     local path = '/data/levels'
+    if lvl ~= ol_lvl then
+        ol_lvl = lvl
+        on_selection_change(lvl)
+    end
     if lvl.official then --this means the level  is an official level and we should load the audio from other path
         path = 'data/levels/official' --this path
     end
@@ -374,7 +429,10 @@ function mod:keypressed(key)
     end
     if key == 'escape' then
         show_levels = false
-        
+        if old_gui then 
+            print('die')
+            old_gui:delete(old_gui) 
+        end
     end
     if key == "return" then
         if show_levels then
@@ -405,25 +463,33 @@ function mod:keypressed(key)
         end
 
     end
+    on_level_change(lvl,path)
+    
 end
 function love.resize( w, h )
     width, height, flags = love.window.getMode( )
     reloadFontSizes()
+    background:resize()
     notif_man:resize(w,h)
 end
 function mod:update(dt)
     button_update(dt)
     update_difficulties_buttons(dt)
     play_audio(dt)
+    update_rankings_gui()
+    background:update(dt)
     w_items:update(dt)
+    time_mod:update(dt)
     local difficulties = levels[indexselect+1].difficulties
     difficulty = levels[indexselect+1].difficulties[(#difficulties-difficulty_index_select)]
     if love.keyboard.isDown('backspace') then
         time = time + dt
         if time > 1 then
             time = 0
-            stop_all_songs()
-            loadStateMod:loadState('mainMenu')
+            --stop_all_songs()
+            loadStateMod:loadState('mainMenu',{
+                keepColor = true
+            })
         end
         return
     end

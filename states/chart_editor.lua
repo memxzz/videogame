@@ -3,6 +3,7 @@ local loadStateMod = require('modules.loadState')
 local lume = require('libraries.lume')
 local notif_man = require('modules.notification_manager')
 local timeMod = require('libraries.time')
+local template_handler = require('modules.template_handler')
 local exitTime = 0
 local time = 0
 local mouse = {x = 0,y = 0}
@@ -24,6 +25,8 @@ local level_info =  {}
 local placeable = false
 local difficulty = 'normal'
 local typing = false
+local actual_grid = 0
+local last_grid = 0
 local chart_sets = {
     offset = 0,
     size = 300,
@@ -37,13 +40,31 @@ local type_events = {
     },
     ['change_scrollspeed'] = {
         multiplier = 1,
+        speed = 1,
+    },
+    ['add_grid'] = {
+        time_sign = {4,4},
+        bpm = 60,
+        height = 0,
+        old_i = 0,
+    },
+    ['change_background'] = {
+        color_r = 0,
+        color_g = 0,
+        color_b = 0,
+        lerp_time = 1
     }
 }
 local assets = {
     events = {
         ['template'] = love.graphics.newImage('assets/chart_editor/events_ico/template.png'),
-        ['end_song'] = love.graphics.newImage('assets/chart_editor/events_ico/end_song.png')
+        ['end_song'] = love.graphics.newImage('assets/chart_editor/events_ico/end_song.png'),
+        ['add_grid'] = love.graphics.newImage('assets/chart_editor/events_ico/add_grid.png'),
+        ['change_scrollspeed'] = love.graphics.newImage('assets/chart_editor/events_ico/change_scrollspeed.png'),
     }
+}
+local events_buttons = {
+
 }
 local level_name = ''
 local width, height, flags = love.window.getMode( )
@@ -71,6 +92,7 @@ local fonts = {
 local actual_event = 0
 local target_offset = 0
 local actual_event_to_add = 'end_song'
+local showing_events = false
 local function reloadFontSizes()
     local yfactor = height/600
     for i,v in pairs(fonts) do
@@ -82,9 +104,28 @@ local function reloadFontSizes()
         
     end
 end
+
 local function new_level()
     level_info = template_handler:get('levelInfo')
-    return template_handler:get('level')
+    local nlevel = template_handler:get('level')
+    local event = {
+            name = 'add_grid',
+            properties = {
+                time_sign = {4,4},
+                bpm = 60,
+                height = 0,
+                invencible = true --holy reference
+            }
+        }
+    nlevel.arrows[0] = {
+        0,0,0,0,
+        events = {[1] = event}
+    }
+    nlevel.grids[0] = { --hardcoded
+        position_y = 0,
+        event = event
+    }
+    return nlevel
 end
 local function load_level_fromfile(name,path,difficulty)
     local levelDataEnc = love.filesystem.read(path..'/'..name..'/'..difficulty..'.rvc')
@@ -94,6 +135,7 @@ local function load_level_fromfile(name,path,difficulty)
     level_info = unserial
     return unencrypthLevel 
 end
+
 local function loadAudioSamples()
     local nTable = {}
     local count = songData:getSampleCount()*2
@@ -117,7 +159,29 @@ local function loadAudioSamples()
     print("sample count:", songData:getSampleCount())
     print("sample rate:", songData:getSampleRate())
 end
-
+local function show_events()
+    for i,v in pairs(events_buttons) do
+        v:delete(v)
+    end
+    local d = 0
+    showing_events = true
+    for i,v in pairs(type_events) do
+        local item = w_items:add_item("textButton")
+        item.background_color = {0.5,0.5,0.5,0.7}
+        item.params.text = i
+        item.position.x = width/2
+        item.position.y = 400 + d*50
+        item.params.on_click = function ()
+            for i,v in pairs(events_buttons) do
+                v:delete(v)
+            end
+            showing_events = false
+            actual_event_to_add = item.params.text
+        end
+        events_buttons[#events_buttons+1] = item
+        d = d + 1
+    end
+end
 
 local function load_level(name,path,diff)
     local loaded_level
@@ -229,6 +293,7 @@ local function draw_soundWave()
             love.graphics.setColor(1,0,0,1)
             love.graphics.print('[WARNING]: Due to an error, the soundwave might not render properly.',width/2 - 200,height/2)
             love.graphics.setColor(1,1,1,1)
+            love.graphics.setLineWidth(5)
             return
         end
         local s1 = soundSamples[i]
@@ -312,6 +377,8 @@ local function debug_arrow_draw(x,y,i)
     love.graphics.print('t: '..tostring(i),x,y)
     love.graphics.setColor(1,1,1,1)
 end
+local old_event
+
 local function get_selected_event(events)
     if placeable then return end
     local size = 335
@@ -319,6 +386,18 @@ local function get_selected_event(events)
     local pos = place-mouse.x+80
     local shit = math.floor(pos/80)+1
     actual_event = shit
+    --show_event_data(events)
+end
+local function events_draw_debug(x,y,index,props)
+    if not debug then return end
+    love.graphics.setColor(1,0,0,1)
+    love.graphics.print(index,x,y)
+    local cant = 0
+    for i,v in pairs(props) do
+        cant = cant + 1
+        love.graphics.print(tostring(i)..': '..tostring(v),x,y+cant*20)
+    end
+    love.graphics.setColor(1,1,1,1)
 end
 local function draw_events(events,index)
     local bottom = height-200
@@ -332,7 +411,9 @@ local function draw_events(events,index)
         if assets.events[v.name] then
             love.graphics.draw(assets.events[v.name],x,y-12,0,0.15,0.15)
         end
+        events_draw_debug(x,y,index,v.properties)
     end
+
 end
 local function draw_arrow(arrow,index)
     local size = 335
@@ -356,56 +437,152 @@ local function draw_arrow(arrow,index)
         end
     end
 end
-local function draw_grid()
-    --local x1 = 280
-    --local x2 = 580
+
+local function get_actual_grid()
+    if not level.grids then return end
+
+    local current = nil
+    local previous = nil
+
+    for gridTime, grid in pairs(level.grids) do
+        if gridTime <= time then
+            if current == nil or gridTime > current then
+                previous = current
+                current = gridTime
+            elseif previous == nil or gridTime > previous then
+                previous = gridTime
+            end
+        end
+    end
+
+    if current ~= nil then
+        actual_grid = current
+        last_grid = previous or current
+    end
+end
+local function update_grid_heights()
+    local times = {}
+
+    for time in pairs(level.grids) do
+        times[#times + 1] = time
+    end
+
+    table.sort(times)
+
+    local last
+    local last_t = 0
+    for _, time in ipairs(times) do
+        local v = level.grids[time]
+
+        if v.event then
+            v.event.properties.height = 0
+        end
+
+        if last and last.event then
+            local diff = v.position_y - last.position_y
+
+            if diff < 0.2 then
+                diff = 0.01
+            end
+
+            last.event.properties.height = diff
+
+            if v.event then
+                v.event.properties.old_i = last_t
+            end
+        end
+
+        last = v
+        last_t = time
+    end
+end
+local function draw_grid(grid)
+    if not grid.event then return end
+
     local size = 335
     local x1 = width/2 - size/2
     local x2 = width/2 + size/2
 
     local size_factor = chart_sets.size / 300
-    local spacing = (60 / level.bpm)*chart_sets.multy * height * size_factor
+    local bpm = grid.event.properties.bpm
+    local grid_height = grid.event.properties.height or 0
 
-    local referenceY = height-150
-    --if chart_sets.offset < 0 then referenceY = referenceY + chart_sets.offset end
-    love.graphics.line(x1, referenceY, x2, referenceY)
+    if bpm <= 0 then return end
+
+    local spacing = (60 / bpm)
+        * chart_sets.multy
+        * height
+        * size_factor
 
     if spacing <= 0 then return end
 
-
+    local referenceY = height - 150 - (grid.position_y * height)
     local start_y = chart_sets.offset + referenceY
 
-
-    local count = math.ceil(height / spacing) + 2
+    local max_height = grid_height == 0
+        and math.huge
+        or grid_height*size_factor*height
     
-    for i = 0, count do
-        local y = start_y - spacing * i
+    local function draw_lines(step, color)
+        love.graphics.setColor(color)
+        local first = math.floor((start_y - height) / step)
+        local last = math.ceil(start_y / step)
 
+        for i = first, last do
+            local y = start_y - step * i
+            local distance_from_start = step * i
 
-        while y > height do
-            y = y - spacing * count
-        end
+            if distance_from_start >= 0
+                and distance_from_start <= max_height
+                and y >= 0
+                and y <= height then
 
-        if y >= 0 and y <= height then
-            love.graphics.line(x1, y, x2, y)
+                love.graphics.line(x1, y, x2, y)
+            end
         end
     end
-    for i = 0, count do
-        local y = start_y - spacing*4 * i
 
+    draw_lines(spacing, {1, 1, 1, 1})
+    draw_lines(spacing * 4, {1, 0, 0, 1})
+end
+local function grid_background()
+    local size = 335
+    local x1 = width/2 - size/2
+    love.graphics.setColor(0,0,0,1)
+    love.graphics.rectangle("fill",x1,0,size,height)
+    love.graphics.setColor(1,1,1,1)
+end
+local function draw_all_grids()
+    local size = 335
+    local x1 = width/2 - size/2
+    local x2 = width/2 + size/2
 
-        while y > height do
-            y = y - spacing*4 * count
-        end
-
-        if y >= 0 and y <= height then
-            love.graphics.setColor(1,0,0,1)
-            love.graphics.line(x1, y, x2, y)
-        end
+    local referenceY = height-150
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.line(x1, referenceY, x2, referenceY)
+    if not level.grids then return end
+    for i,v in pairs(level.grids) do
+        draw_grid(v)
     end
 end
 
-
+local function add_grid(timedd)
+    if not level.grids then level.grids = {} end
+    level.grids[timedd] = template_handler:get('grid_object')
+    level.grids[timedd].position_y = timedd
+    update_grid_heights()
+end
+local list
+local old_event
+local function event_data_list()
+    local event = level.arrows[time]
+    if not event then return end
+    event = event.events
+    if not event then return end
+    event = event[actual_event]
+    if not event then return end
+    print('to show')
+end
 local function draw_level()
     if level == nil then return end
     local top = 0
@@ -423,8 +600,12 @@ local function draw_level()
         if v.events then
             draw_events(v.events,v.index)
             get_selected_event(v.events)
+            
         end
     end
+    if old_event == actual_event then return end
+    old_event = actual_event
+    event_data_list()
 end
 local function copyFile(source, destination)
     local file = io.open(source, "rb")
@@ -517,14 +698,14 @@ local function add_gui()
     charterBox.params.on_text_return = function(text)
         level_info.charter = text
     end
-    local event_to_add = w_items:add_item("textBox")
-    event_to_add.position = {
+    local add_event = w_items:add_item("textButton")
+    add_event.position = {
         x = width-220,
         y = 380
     }
-    event_to_add.params.text_label = 'event to add'
-    event_to_add.params.on_text_return = function(text)
-        actual_event_to_add = text
+    add_event.params.text = 'add event'
+    add_event.params.on_click = function ()
+        show_events()
     end
     local level_details = w_items:add_item('list')
     level_details.position.y = 50
@@ -545,6 +726,7 @@ local function add_gui()
 end
 function mod:load(params)
     print('[Chart_editor]: Loaded.')
+    --love.graphics.setBackgroundColor(0,0,0)
     load_level(params.song,params.path,params.difficulty)
     reloadFontSizes()
     add_gui()
@@ -560,7 +742,6 @@ function mod:draw()
     love.graphics.push()
     love.graphics.setLineWidth(1)
     love.graphics.setFont(fonts.montserrat.obj)
-    love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', VelMulty: '..tostring(velMulty)..', size: '..tostring(chart_sets.size)..', bpm: '..tostring(level.bpm)..', trail: '..tostring(trail))
     love.graphics.setColor(1,1,1,1)
     
     
@@ -570,16 +751,21 @@ function mod:draw()
         love.graphics.print('Exiting...'..'('..tostring(math.floor(exitTime))..')')
         love.graphics.pop()
     end
+    grid_background()
     draw_soundWave()
-    draw_grid()
+    
+    draw_all_grids()
+    --draw_grid()
     draw_level()
     draw_selecting_box()
     w_items:draw()
     notif_man:draw()
+    love.graphics.print('time: '..tostring(time)..', offset: '..tostring(chart_sets.offset)..', VelMulty: '..tostring(velMulty)..', size: '..tostring(chart_sets.size)..', bpm: '..tostring(level.bpm)..', trail: '..tostring(trail)..', grid: '..tostring(actual_grid))
+
     love.graphics.pop()
     love.graphics.rotate(0)
 end
-function _input(dt)
+local function _input(dt)
     local multy = 50
     if love.keyboard.isDown('lshift') then
         chart_sets.total_snap = true
@@ -603,14 +789,26 @@ function get_arrow()
         end
     end
 end
-function timetogrid(custom)
-    local use = time
-    if custom  then use = custom end
-    local spacing = (60 / level.bpm)*chart_sets.multy
-    local y = math.floor(use/spacing) * spacing
-    return y
+local function timetogrid(custom)
+    local use = custom or time
+    if not level.grids then level.grids = {} return 0 end
+    local grid = level.grids[actual_grid]
+    if not grid then return 0 end
+
+    local bpm = grid.event.properties.bpm
+    if bpm <= 0 then return 0 end
+
+    local spacing = (60 / bpm) * chart_sets.multy
+
+
+    local startTime = grid.position_y
+
+    local relativeTime = use - startTime
+    local snappedTime = math.floor(relativeTime / spacing) * spacing
+
+    return startTime + snappedTime
 end
-function set_trail(x) --fixed
+local function set_trail(x) --fixed
     local size = 335
     local right = width/2 + size/2
     placeable = true
@@ -625,7 +823,33 @@ function set_trail(x) --fixed
         end
     end
 end
-function fixed_update(fixed_dt)
+local function move_level(x,y)
+    local d = 0.5
+    if love.keyboard.isDown('lctrl') then
+        if love.keyboard.isDown('lshift') then d = d/2 end
+        chart_sets.multy = chart_sets.multy + d*y
+        if chart_sets.multy < 0.25 then chart_sets.multy = 0.25 end
+        return
+    end
+    if love.keyboard.isDown('lshift') then
+        if love.keyboard.isDown('q') then
+            velMulty = velMulty+0.1*y
+            if velMulty > 3 then velMulty =  3 end
+            if velMulty < 0.1  then velMulty = 0.1 end
+            return
+        end
+        chart_sets.size = chart_sets.size + 10*y
+        chart_sets.offset = chart_sets.offset + (chart_sets.offset/chart_sets.size)*10*y --the happines and wholesomeness formula
+        return
+    end
+    chart_sets.offset = chart_sets.offset + 25*(300/chart_sets.size)*y
+    target_offset = chart_sets.offset
+    if chart_sets.offset < 0  then chart_sets.offset = 0 end
+
+    
+   -- chart_sets.time_offset = chart_sets.time_offset + 10*y
+end
+local function fixed_update(fixed_dt)
     local size_factor = chart_sets.size/300
     if playing then
         chart_sets.offset = chart_sets.offset + fixed_dt*height*size_factor*velMulty
@@ -636,10 +860,16 @@ function fixed_update(fixed_dt)
         end
         --chart_sets.offset = old_timestep
     end
+    get_actual_grid()
     --print(chart_sets.time_offset)
+    if love.keyboard.isDown('up') then
+        move_level(nil,1)
+    elseif love.keyboard.isDown('down') then
+        move_level(nil,-1)
+    end
 end
 
-function screenToTime(y)
+local function screenToTime(y)
     local size_factor = chart_sets.size / 300
 
     local normalizedY = (height - y) / height
@@ -667,7 +897,7 @@ function mod:update(dt)
         exitTime = exitTime + dt
         if exitTime > 4 then
             exitTime = 0
-            loadStateMod:loadState('mainMenu')
+            loadStateMod:loadState('levelSelector')
         end
         return
     end
@@ -840,10 +1070,22 @@ function mod:keypressed(key)
     end
 end
 local function get_event_properties(name)
+    print('event props')
     print(name,actual_event_to_add)
     if not type_events[name] then return end
     local props = shallow_copy(type_events[name])
     return props
+end
+local function per_event_add_functions(event,val,eventt)
+    if event == 'add_grid' then
+        add_grid(val)
+        level.grids[val].event = eventt
+    end
+end
+local function per_event_delete_functions(event,val)
+    if event == 'add_grid' then
+        level.grids[val] = nil
+    end
 end
 local function addEvent(time,event)
     if love.keyboard.isDown('lctrl') then return end
@@ -860,20 +1102,30 @@ local function addEvent(time,event)
         warning.text.subtitle = "The event doesn't exist."
         return
     end
-    table.insert(timeEvents,{
+    local eventtt = {
         name = event,
         properties = props
-    })
+    }
+    table.insert(timeEvents,eventtt)
+    per_event_add_functions(event,time,eventtt)
+    if not level.arrows then level.arrows = {} end
+    level.arrows[time] = {}
     level.arrows[time] = d
+    
 end
 local function addNote(time,typ)
+    if showing_events then return end
     if love.keyboard.isDown('lctrl') then return end
     if not placeable then return end
+    if not time then return end
+    if time < 0 then return end
     local d = {0,0,0,0,index = time,events = {}}
     if level.arrows[time] then d = level.arrows[time] end
+    history[#history + 1] = {{time = time,value = shallow_copy(d)}}
     d[trail] = typ
     if typ ~= 3 then last_arrow = d end
     level.arrows[time] = d
+    
 end
 
 function deleteperproximity()
@@ -892,12 +1144,67 @@ function deleteperproximity()
 
     return bestTime
 end
+local props_buttons = {}
+local function show_event_props(event,act_ev,dd,show)
+    --local props = get_event_properties(event.name)
+    local props = event.properties
+    print('size: ',#props)
+    local props_size = 0
+    for i,v in pairs(props) do
+        props_size = props_size + 1
+    end
+    if props_size <= 0 then
+        showing_events = false
+        return
+    end
+    for i,v in pairs(props_buttons) do
+        v:delete(v)
+    end
+    showing_events = true
+    if not props then return end
+    local d = 0
+    for i,v in pairs(props) do
+        local type = 'textBox'
+        if show then type = 'textLabel' end
+        local item = w_items:add_item(type)
+        item.background_color = {0.5,0.5,0.5,0.7}
+        if show then
+            item.params.text = i..': '..tostring(v)
+        else
+            item.params.text_label = i..': '..tostring(v)
+        end
+        
+        item.position.x = width/2
+        if show then item.position.x = mouse.x end
+        item.position.y = 400 + d*50
+        if not show then
+            item.params.on_text_return = function (text)
+                for i,v in pairs(props_buttons) do
+                    v:delete(v)
+                end
+                showing_events = false
+                dd.events[act_ev].properties[i] = tonumber(text)
+                --event.properties[i] = tonumber(text)
+                print(event.properties[i])
+            end
+        end
+        
+        props_buttons[#props_buttons+1] = item
+        d = d + 1
+    end
+end
 local function deleteEvent(timed)
     if placeable then return end
     local d = {0,0,0,0,index = timed,events = {}}
-    if not d.events then return end
     if level.arrows[timed] then d = level.arrows[timed] end
+    if not d.events then return end
     if not d.events[actual_event] then return end
+    if love.keyboard.isDown('lctrl') then
+        show_event_props(d.events[actual_event],actual_event,d)
+        return
+    end
+    if d.events[actual_event].properties.invencible then return end
+    per_event_delete_functions(d.events[actual_event].name,timed)
     d.events[actual_event] = nil
     local id = 0
     local newTable = {}
@@ -906,6 +1213,7 @@ local function deleteEvent(timed)
         newTable[id] = v
     end
     d.events = newTable
+    update_grid_heights()
 end
 local function deleteNote(timed)
     if not level.arrows[timed] then 
@@ -925,8 +1233,11 @@ local function deleteNote(timed)
     level.arrows[timed] = d
     
 end
+
+
 function love.mousepressed( x, y, button, istouch, presses )
     local val = timetogrid()
+    if not val then val = 0 end
     w_items:mousepressed(x,y,button,istouch,presses)
     selected_area.point1.x = x
     selected_area.point1.y = y
@@ -938,42 +1249,21 @@ function love.mousepressed( x, y, button, istouch, presses )
         --addNote(time)
         addNote(val,1)
         addEvent(val,actual_event_to_add)
+        
     end
     
     --if not arrow then return end
     if button == 2 then -- delete arrow
         local val2 = timetogrid()
+        if not val2 then val2 = 0 end
         if chart_sets.total_snap  then val2 = deleteperproximity() end
         deleteNote(val2)
         deleteEvent(val2)
     end
 end
 
-function love.wheelmoved( x, y )
-    local d = 0.5
-    if love.keyboard.isDown('lctrl') then
-        if love.keyboard.isDown('lshift') then d = d/2 end
-        chart_sets.multy = chart_sets.multy + d*y
-        if chart_sets.multy < 0.25 then chart_sets.multy = 0.25 end
-        return
-    end
-    if love.keyboard.isDown('lshift') then
-        if love.keyboard.isDown('q') then
-            velMulty = velMulty+0.1*y
-            if velMulty > 3 then velMulty =  3 end
-            if velMulty < 0.1  then velMulty = 0.1 end
-            return
-        end
-        chart_sets.size = chart_sets.size + 10*y
-        chart_sets.offset = chart_sets.offset + (chart_sets.offset/chart_sets.size)*10*y --the happines and wholesomeness formula
-        return
-    end
-    chart_sets.offset = chart_sets.offset + 25*(300/chart_sets.size)*y
-    target_offset = chart_sets.offset
-    if chart_sets.offset < 0  then chart_sets.offset = 0 end
-
-    
-   -- chart_sets.time_offset = chart_sets.time_offset + 10*y
+function love.wheelmoved(x,y)
+    move_level(x,y)
 end
 function love.resize( w, h )
     w_items:clear()
@@ -1019,6 +1309,7 @@ function love.mousereleased( x, y, button, istouch, presses )
     end
 
     --add longnote
+    if showing_events then return end
     if not last_arrow then return end
     if not last_arrow.index then return end
     if button ~= 1 then return end

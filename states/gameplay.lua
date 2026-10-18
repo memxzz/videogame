@@ -9,12 +9,20 @@ local bitser = require('libraries.bitser')
 local template_handler = require('modules.template_handler')
 local w_items = require('libraries.workable_items')
 local lume = require('libraries.lume')
+local back_color = {0,0,0}
+local back_target_color = {0,0,0}
+local back_time_lerp = 1
 --modules
 local conf_manager = require('modules.configuration_manager')
 --submenus
 local pause_menu = require('states.menus_gameplay.pause_menu')
 ------------
 local confs = {}
+local gameplay_multis = {
+    scrollspeed = 1,
+    target_speed = 1,
+    move_speed = 1
+}
 local sprites = {
     
 }
@@ -128,6 +136,15 @@ end
 local function action_Event(events_list)
     for i,v in pairs(events_list) do
         if v.name == 'end_song' then end_song() end
+        if v.name == 'change_scrollspeed' then 
+            gameplay_multis.target_speed = v.properties.multiplier
+            gameplay_multis.move_speed = v.properties.speed
+            if not gameplay_multis.move_speed then gameplay_multis.move_speed = 1 end
+        end
+        if v.name == 'change_background' then
+            back_target_color = {v.properties.color_r,v.properties.color_g,v.properties.color_b}
+            back_time_lerp = v.properties.lerp_time
+        end
     end
 
 end
@@ -170,32 +187,60 @@ local function beat_update(dt)
         end
     end
 end
-local function draw_grid()
-    local scroll = confs.gameplay.scrollSpeed/velMulty
-    local top = height*4 - scroll*200
-    
-    local spacing = (60 / level.bpm)*scroll*100
-    local count = math.ceil(height*4 / spacing) + 2
-    local trailsQuantity = #input.pointingTo
 
-    for i = 0, count do
-        local y = height*4
-        y = top+(time)*scroll*100 + i*spacing
-        y = y+600
+local function draw_grid(grid) --bullshit bullshit bullshit
+    local scroll = confs.gameplay.scrollSpeed / velMulty
+    scroll = scroll * gameplay_multis.scrollspeed
 
+    local position_y = grid.position_y
+    local grid_height = grid.event.properties.height
+    local bpm = grid.event.properties.bpm
 
-        while y > height*8 do
-            y = y - spacing * count
+    local top = height * 4 - scroll * 500
+    local spacing = (60 / bpm) * scroll * 100
+
+    if spacing <= 0 then return end
+
+    local size = 800
+    local x = (width / 0.15) / 2
+    x = x - 4 * size + 2 * size
+
+    local y = top / 3 - grid_height * scroll * 100
+    y = y - position_y * scroll * 100
+    y = y + 310
+    y = y + time * scroll * 100
+
+    if grid_height == 0 then
+
+        local first = math.ceil((0 - y) / spacing)
+        local last = 0
+
+        for i = first, last do
+            local line_y = y + i * spacing
+
+            if line_y >= 0 and line_y <= height * 8 then
+                love.graphics.line(x, line_y, x + 4 * size, line_y)
+            end
         end
+    else
 
-        if y >= 0 and y <= height*8 then
-            local x = (width/0.15)/2
-            local size = 800
-            x = x - 4 *size + 2*size
-            love.graphics.line(x,y,x+4*size,y)
+        local end_y = y + grid_height * scroll * 100
+        local line_y = y
+
+        while line_y <= end_y do
+            if line_y >= 0 and line_y <= height * 8 then
+                love.graphics.line(x, line_y, x + 4 * size, line_y)
+            end
+
+            line_y = line_y + spacing
         end
     end
-    
+end
+local function draw_all_grids()
+    --draw_grid(level.grids[0])
+    for i,v in pairs(level.grids) do
+        draw_grid(v)
+    end
 end
 local function table_clear(table)
     for i,v in pairs(table) do table[i] = nil end
@@ -242,7 +287,7 @@ local function distance ( pos1, pos2 )
   return math.sqrt ( dx * dx + dy * dy )
 end
 local function rankings(magnitud)
-    local scroll = confs.gameplay.scrollSpeed*velMulty
+    local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
     if magnitud < 100/(40/scroll)  then ranking = 'sick' addPoints('sick') return end
     if magnitud < 300/(40/scroll)  then ranking = 'good' addPoints('good') return end
     if magnitud < 600/(40/scroll) then ranking = 'bad' addPoints('bad') return end
@@ -323,6 +368,7 @@ end
 function mod:load(params)
     confs = conf_manager:get_data()
     pause_menu:load()
+    love.graphics.setBackgroundColor(back_color[1],back_color[2],back_color[3])
     sprites["trail"] = love.graphics.newImage('assets/trail.png')
     sprites["arrow"] = love.graphics.newImage('assets/arrow.png')
     sprites["arrowtail_end"] = love.graphics.newImage('assets/arrow_long_end.png')
@@ -359,7 +405,7 @@ end
 local function check_tail(f)
     if not f.arrowIndex.tails then return end
     if f.typ ~= 2 then return end
-    local scroll = confs.gameplay.scrollSpeed*velMulty
+    local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
     local factor =  confs.gameplay.scrollSpeed/80
     local tail = f.arrowIndex.tails[f.trailIndex]
     local ts = f.position.y - tail*scroll*factor*80
@@ -396,6 +442,7 @@ local function moveArrows(dt)
             --print(i,v.position.y)
             local timeDiff = time-f.arrowIndex.index
             local scroll = confs.gameplay.scrollSpeed/velMulty
+            local scroll = scroll*gameplay_multis.scrollspeed
             --f.position.y = f.position.y + (scroll * 100) * dt
             --f.position.y = time * 80/confs.scrollSpeed
             local top = height*4 - scroll*200
@@ -413,7 +460,7 @@ local function moveArrows(dt)
                     
                     v[d] = nil
                 elseif f.typ == 2 and f.trailIndex then
-                    local scroll = confs.gameplay.scrollSpeed*velMulty
+                    local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
                     local factor =  confs.gameplay.scrollSpeed/80
                     local ts = f.position.y - f.arrowIndex.tails[f.trailIndex]*scroll*factor*80
                     local b = (1/factor)*100
@@ -454,7 +501,7 @@ local function spawnArrow()
             end
             for i,v in pairs(arrow) do
                 --print('new')
-                local scroll = confs.gameplay.scrollSpeed*velMulty
+                local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
                 local tableD = shallow_copy(elements.arrow)
                 tableD.position.y = height*4 - scroll * 100
                 tableD.delay = v
@@ -552,7 +599,7 @@ local function drawTail(arrow,index)
     if arrow.pressing then 
         love.graphics.setScissor(x,y,sx,sy)
     end
-    local scroll = confs.gameplay.scrollSpeed*velMulty
+    local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
     local tail = arrow.arrowIndex.tails[index]
     local factor =  confs.gameplay.scrollSpeed/80
     --print(factor)
@@ -659,7 +706,7 @@ function mod:draw()
     love.graphics.push()
     love.graphics.setColor(1,1,1,1)
     love.graphics.scale(0.15, 0.15)
-    draw_grid()
+    draw_all_grids()
     drawTrail()
     drawArrows()
     debug_draw()
@@ -694,12 +741,21 @@ local function fixed_update(fixed_dt)
     beat_update(fixed_dt)
     spawnArrow()
 end
-
+local function gameplay_multis_update(dt)
+    gameplay_multis.scrollspeed = lume.lerp(gameplay_multis.scrollspeed,gameplay_multis.target_speed,gameplay_multis.move_speed*dt)
+end
+local function update_background_color(dt)
+    for i = 1,3,1 do
+        back_color[i] = lume.lerp(back_color[i],back_target_color[i],dt*back_time_lerp)
+    end
+    love.graphics.setBackgroundColor(back_color[1],back_color[2],back_color[3])
+end
 function mod:update(dt)
 
     
     --time = math.floor(time * 100 + 0.5) / 100
     fps = 1/dt
+    
     if states.endingSong then
         timejejetime = lume.lerp(timejejetime,0,dt*1.5)
         print(timejejetime)
@@ -714,6 +770,8 @@ function mod:update(dt)
         start_task.paused = paused
     end
     setPointings()
+    gameplay_multis_update(dt)
+    update_background_color(dt)
     timerModule:update(dt)
     pause_menu:update(dt,paused)
     accumulator = accumulator + dt

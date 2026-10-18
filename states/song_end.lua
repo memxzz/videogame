@@ -102,7 +102,11 @@ function mod:load(params)
     stats = params.stats
     songSound = params.songSound
     add_gui()
-    rank_man:add_ranking(params.difficulty,params,params.path..'/'..params.songName)
+    local nParams = {
+        points = params.stats.points,
+        accuracy = params.stats.accuracy
+    }
+    rank_man:add_ranking(params.difficulty,nParams,params.path..'/'..params.songName)
 end
 function mod:update(dt)
     local target = 0

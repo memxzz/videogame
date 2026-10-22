@@ -27,6 +27,7 @@ local difficulty = 'normal'
 local typing = false
 local actual_grid = 0
 local last_grid = 0
+
 local chart_sets = {
     offset = 0,
     size = 300,
@@ -283,32 +284,36 @@ local function draw_soundWave()
     love.graphics.setLineWidth(5)
     local lastI = 0
     for i = first, last - 1 do
-        if not soundSamples[i] then -- to prevent thingis
-            --print('[WARNING]: s1 might not exist')
-            
-            love.graphics.line(
-                centerX, 0,
-                centerX, centerY+200
-            )
-            love.graphics.setColor(1,0,0,1)
-            love.graphics.print('[WARNING]: Due to an error, the soundwave might not render properly.',width/2 - 200,height/2)
-            love.graphics.setColor(1,1,1,1)
-            love.graphics.setLineWidth(5)
-            return
+        --if not soundSamples[i] then -- to prevent thingis
+        --    --print('[WARNING]: s1 might not exist')
+        --    
+        --    love.graphics.line(
+        --        centerX, 0,
+        --        centerX, centerY+200
+        --    )
+        --    love.graphics.setColor(1,0,0,1)
+        --    love.graphics.print('[WARNING]: Due to an error, the soundwave might not render properly.',width/2 - 200,height/2)
+        --    love.graphics.setColor(1,1,1,1)
+        --    love.graphics.setLineWidth(1)
+        --else 
+        --    
+        --end
+        if soundSamples[i] then
+            local s1 = soundSamples[i]
+            local s2 = soundSamples[i + 1]
+            local y1 = timeToY(s1.time - wavetime)
+            local y2 = timeToY(s2.time - wavetime)
+            local x1 = centerX + s1.value * amplitude
+            local x2 = centerX + s2.value * amplitude
+            local offset = 65
+            if y1 < height and y1 > -80 then -- we do this so it only renders what's visible.
+                love.graphics.line(
+                    x1, y1+offset,
+                    x2, y2+offset
+                )
+            end
         end
-        local s1 = soundSamples[i]
-        local s2 = soundSamples[i + 1]
-        local y1 = timeToY(s1.time - wavetime)
-        local y2 = timeToY(s2.time - wavetime)
-        local x1 = centerX + s1.value * amplitude
-        local x2 = centerX + s2.value * amplitude
-        local offset = 65
-        if y1 < height and y1 > -80 then -- we do this so it only renders what's visible.
-            love.graphics.line(
-                x1, y1+offset,
-                x2, y2+offset
-            )
-        end
+        
         
     end
 
@@ -516,9 +521,8 @@ local function draw_grid(grid)
 
     if spacing <= 0 then return end
 
-    local referenceY = height - 150 - (grid.position_y * height)
+    local referenceY = height - 150 - (grid.position_y * height * size_factor)
     local start_y = chart_sets.offset + referenceY
-
     local max_height = grid_height == 0
         and math.huge
         or grid_height*size_factor*height
@@ -959,7 +963,7 @@ function mod:textinput(key)
     w_items:textinput(key)
 end
 
-function return_back_history()
+local function return_back_history()
     print('return')
     local index = #history
     local items = history[index]
@@ -979,7 +983,7 @@ function return_back_history()
     notif.text.subtitle = 'Returned '..tostring(count)..' items.'
     history[index] = nil
 end
-function selecting_combos(key)
+local function selecting_combos(key)
     local items = {}
     if typing then return end
     if key == 'backspace' then
@@ -998,13 +1002,13 @@ function selecting_combos(key)
 
 
 end
-function copy_selected()
+local function copy_selected()
     copied_group = {}
     for i,v in pairs(selected_notes) do
         copied_group[i] = shallow_copy(level.arrows[i])
     end
 end
-function paste_selected()
+local function paste_selected()
     local first = 9999999999
     local old_state = {}
     for gtime,group in pairs(copied_group) do
@@ -1128,7 +1132,7 @@ local function addNote(time,typ)
     
 end
 
-function deleteperproximity()
+local function deleteperproximity()
     print('prox')
     local bestDistance = math.huge
     local bestTime = nil

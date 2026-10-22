@@ -12,6 +12,7 @@ local lume = require('libraries.lume')
 local back_color = {0,0,0}
 local back_target_color = {0,0,0}
 local back_time_lerp = 1
+local auto_play_en = false
 --modules
 local conf_manager = require('modules.configuration_manager')
 --submenus
@@ -571,6 +572,38 @@ local function inputPress(key)
         if result == i then press(v) end
     end
 end
+local function auto_play()
+    if not auto_play_en then return end
+    local scroll = confs.gameplay.scrollSpeed*velMulty*gameplay_multis.scrollspeed
+    for i,v in pairs(input.pointingTo) do
+        local pos1 = {
+        x = 0,
+        y = height*4
+        }
+        local pos2 = {
+            x = 0,
+            y = v.position.y
+        }
+        local magnitud = distance(pos1,pos2)
+        if magnitud < 300/(40/scroll)  then
+            press(v)
+        end
+    end
+    for i,v in pairs(input.lastPoint) do
+        local pos1 = {
+        x = 0,
+        y = height*4
+        }
+        local pos2 = {
+            x = 0,
+            y = v.position.y
+        }
+        local magnitud = distance(pos1,pos2)
+        if magnitud < 300/(40/scroll)  then
+            press(v)
+        end
+    end
+end
 local function inputRelease(key)
     local result = keyTransform(key)
     if not result then return end
@@ -772,6 +805,7 @@ function mod:update(dt)
     setPointings()
     gameplay_multis_update(dt)
     update_background_color(dt)
+    auto_play()
     timerModule:update(dt)
     pause_menu:update(dt,paused)
     accumulator = accumulator + dt
@@ -817,12 +851,12 @@ end
 function mod:keypressed( key )
     if not paused then  inputPress(key) end
     pause_menu:key(key)
-    if key == '-' then debug = not debug end
     if key ==  'escape' then 
         love.audio.pause(song)
         paused = true
     end
     if key == 't' then debug = not debug end
+    if key == 'y' then auto_play_en = not auto_play_en end
     if key == '3'  and charting then 
         time = time - 0.1 
         if time > 0 and time <= song:getDuration() then 
